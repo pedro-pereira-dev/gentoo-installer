@@ -1,0 +1,8 @@
+scripted_user=userName
+scripted_device=deviceName
+scripted_separator=?
+scripted_efi=+512M
+scripted_swap=+1G
+scripted_root=+64G
+scripted_timezone=Europe/Lisbon
+scripted_keymap=pt-latin9

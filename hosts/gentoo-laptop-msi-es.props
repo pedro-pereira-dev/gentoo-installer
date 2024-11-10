@@ -1,8 +1,0 @@
-scripted_user=chuck
-scripted_device=nvme0n1
-scripted_separator=p
-scripted_efi=+1G
-scripted_swap=+8G
-scripted_root=+128G
-scripted_timezone=Europe/Lisbon
-scripted_keymap=pt-latin9

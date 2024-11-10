@@ -18,6 +18,7 @@ mount ${THIS_DEVICE}${THIS_DEVICE_SEPARATOR}1 /efi
 
 # installs base system
 emerge-webrsync || exit 1
+getuto || exit 1
 emerge --ask=n --sync --quiet || exit 1
 emerge --oneshot --ask=n app-portage/cpuid2cpuflags
 sed -i "s/CPU_FLAGS_X86=\"\"/CPU_FLAGS_X86=\"$(cpuid2cpuflags | cut -d' ' -f2-)\"/g" /etc/portage/make.conf

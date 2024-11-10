@@ -39,6 +39,7 @@ INPUT_DEVICES=""
 # portage default options
 #MAKEOPTS="-jXX -lYY"
 EMERGE_DEFAULT_OPTS="--ask --verbose --quiet-build"
+FEATURES="getbinpkg binpkg-request-signature"
 
 # compiler settings
 COMMON_FLAGS="-march=native -O2 -pipe"

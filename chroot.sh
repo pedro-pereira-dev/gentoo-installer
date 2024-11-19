@@ -56,7 +56,7 @@ chown -c root:root /etc/doas.conf
 
 # sets superuser
 passwd -dl root
-useradd -m -G users,wheel,audio,video,usb,plugdev -s /bin/bash ${THIS_USER}
+useradd -m -G users,wheel,audio,video,plugdev,usb,input -s /bin/bash ${THIS_USER}
 chown -R -c ${THIS_USER}:${THIS_USER} /home/${THIS_USER}
 passwd ${THIS_USER} <<EOF
 ${THIS_PASSWORD}

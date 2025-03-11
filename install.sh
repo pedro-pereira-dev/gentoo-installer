@@ -140,16 +140,13 @@ mount --rbind /dev /mnt/gentoo/dev
 mount --make-rslave /mnt/gentoo/dev
 mount --bind /run /mnt/gentoo/run
 mount --make-slave /mnt/gentoo/run
-test -L /dev/shm && rm /dev/shm && mkdir /dev/shm
-mount --types tmpfs --options nosuid,nodev,noexec shm /dev/shm
-chmod 1777 /dev/shm /run/shm
 
 # exports all variables
 export THIS_HOST THIS_USER THIS_PASSWORD THIS_DEVICE THIS_DEVICE_SEPARATOR THIS_TIMEZONE THIS_KEYMAP
 # creates chroot script from wget
 THIS_CHROOT_SCRIPT=$(mktemp)
 wget -qO- https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/chroot.sh >${THIS_CHROOT_SCRIPT} || exit 1
-envsubst <${THIS_CHROOT_SCRIPT} >/mnt/gentoo/chroot.sh
+{ eval "echo \"$(sed 's/"/\\"/g')\""; } <${THIS_CHROOT_SCRIPT} >/mnt/gentoo/chroot.sh
 rm -f ${THIS_CHROOT_SCRIPT}
 
 # chroots into system

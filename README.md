@@ -8,14 +8,14 @@ This project can be used as reference for different solutions but is not the fin
 
 ## Install
 
-To install gentoo using this project, boot up a live ISO system and run the following command to download this installation script and run it with `bash` from an elevated shell session.
+To install gentoo using this project, boot up a live gentoo ISO and run the following command to download this installation script and run it with `bash` from an elevated shell session.
 
-This script was tested only with Ubuntu but will most likely work (famous last words) with any of the major Linux distributions as dependencies are quite common, such as `wget`, `tar`, etc.
+This script was tested only with gentoo but will most likely work (famous last words) with any of the major Linux distributions as dependencies are quite common, such as `wget`, `tar`, etc.
 
 ```bash
 bash <(wget -qO- https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh) \
-  --hostname 'host' --username 'user'                                                                             \
-  --device 'nvme0n1' --device-separator 'p'                                                                       \
-  --efi-size '+1G' --swap-size '+32G' --root-size '+64G'                                                          \
+  --hostname 'host' --username 'user'                                                                                                    \
+  --device 'nvme0n1' --device-separator 'p'                                                                                              \
+  --efi-size '+1G' --swap-size '+32G' --root-size '+64G'                                                                                 \
   --timezone 'Europe/Lisbon' --keymap 'pt-latin9'
 ```

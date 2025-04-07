@@ -59,12 +59,12 @@ Timezone: ${TIMEZONE}
 Keymap: ${KEYMAP}
 Stage3 file: ${LATEST_STAGE}
 
-All data from disk ${DISK_DEVICE}${DISK_PARTITION_SEPARATOR} will be erased!"
+All data from disk ${DISK_DEVICE} will be erased!"
 read -r -p 'Do you want to continue? (Y/n): ' CONFIRMATION && echo ''
 [[ ${CONFIRMATION} == 'n' || ${THIS_CONFIRMATION} == 'N' ]] && exit 0
 
 read -ra ALL_PARTITIONS <<<"$(blkid | grep -oE "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}\\w*" | xargs)"
-wipefs -a "${ALL_PARTITIONS[@]}" "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}"
+wipefs -a "${ALL_PARTITIONS[@]}" "${DISK_DEVICE}"
 sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' <<EOF | fdisk "${DISK_DEVICE}"
     g  # create empty GPT partition table
     n  # create EFI partition

@@ -8,8 +8,7 @@ emerge-webrsync
 getuto
 emerge --ask=n --verbose --update --newuse --deep --with-bdeps=y --backtrack=30 @world
 
-echo "${TIMEZONE}" >/etc/timezone
-emerge --ask=n --config sys-libs/timezone-data
+ln -sf "../usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
 
 sed -i 's/#en_US ISO-8859-1/en_US ISO-8859-1/g' /etc/locale.gen
 sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' /etc/locale.gen

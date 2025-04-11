@@ -114,8 +114,11 @@ USE=""
 #INPUT_DEVICES=""
 
 #MAKEOPTS="-j[X] -l[X+1]" # X = min(RAM/2GB, threads)
-EMERGE_DEFAULT_OPTS="--ask --verbose --quiet-build"
+EMERGE_DEFAULT_OPTS="--ask --verbose --quiet"
 FEATURES="getbinpkg binpkg-request-signature"
+
+FETCHCOMMAND="${FETCHCOMMAND} --quiet"
+RESUMECOMMAND="${RESUMECOMMAND} --quiet"
 
 COMMON_FLAGS="-march=native -O2 -pipe"
 CFLAGS="${COMMON_FLAGS}"

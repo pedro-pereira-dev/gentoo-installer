@@ -1,20 +1,14 @@
 #!/bin/bash
 
-mkdir -p /efi
-mount "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /efi
-mkdir -p /efi/EFI/Gentoo
-
 emerge-webrsync
 getuto
 emerge --ask=n --verbose --update --newuse --deep --with-bdeps=y --backtrack=30 @world
 
 ln -sf "../usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
-
 sed -i 's/#en_US ISO-8859-1/en_US ISO-8859-1/g' /etc/locale.gen
 sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' /etc/locale.gen
 sed -i 's/keymap="us"/keymap="'"${KEYMAP}"'"/g' /etc/conf.d/keymaps
-locale-gen
-eselect locale set 6
+locale-gen && eselect locale set 6
 env-update && source /etc/profile
 
 echo "${SYSTEM_HOSTNAME}" >/etc/hostname
@@ -33,6 +27,7 @@ ${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2 none swap sw 0 0
 ${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3 / ext4 defaults,noatime 0 1
 EOF
 
+echo "${SYSTEM_HOSTNAME}" >/etc/hostname
 cat <<EOF >/etc/hosts
 # IPv4 and IPv6 localhost aliases
 127.0.0.1 ${SYSTEM_HOSTNAME} localhost

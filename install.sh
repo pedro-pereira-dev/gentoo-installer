@@ -91,13 +91,15 @@ sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' <<EOF | fdisk "${DISK_DEVICE}"
     w  # write changes to disk
 EOF
 
-mkfs.vfat -F 32 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" # fat32 BOOT
-mkswap "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"          # swap SWAP
-swapon "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"          # activates swap
-mkfs.ext4 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3"       # ext4 ROOT
+mkfs.fat -F 32 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" # fat32 BOOT
+mkswap "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"         # swap SWAP
+swapon "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"         # activates swap
+mkfs.ext4 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3"      # ext4 ROOT
 
 mkdir -p /mnt/gentoo
 mount "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3" /mnt/gentoo
+mkdir -p /mnt/gentoo/efi
+mount "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/gentoo/efi
 cd /mnt/gentoo || exit 1
 
 chronyd -q
@@ -105,27 +107,24 @@ wget "${LATEST_STAGE}" || exit 1
 tar xpf stage3-*.tar.xz --xattrs-include='*.*' --numeric-owner -C /mnt/gentoo
 
 rm -rf /mnt/gentoo/etc/portage/package.*
-touch /mnt/gentoo/etc/portage/{package.license,package.use}
-cat <<'EOF' >/mnt/gentoo/etc/portage/make.conf
-USE=""
+touch /mnt/gentoo/etc/portage/{package.accept_keywords,package.license,package.mask,package.use}
+cat <<'EOF' >>/mnt/gentoo/etc/portage/make.conf
 
-#CPU_FLAGS_X86=""
-#VIDEO_CARDS=""
-#INPUT_DEVICES=""
+# The above configuration is shipped by default
+# Any configuration following this comment will override it
+COMMON_FLAGS="-march=native -O2 -pipe"
+CXXFLAGS="${COMMON_FLAGS}"
+FCFLAGS="${COMMON_FLAGS}"
+FFLAGS="${COMMON_FLAGS}"
 
-#MAKEOPTS="-j[X] -l[X+1]" # X = min(RAM/2GB, threads)
-EMERGE_DEFAULT_OPTS="--ask --verbose --quiet"
-FEATURES="getbinpkg binpkg-request-signature"
+RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native"
+GRUB_PLATFORMS="efi-64"
 
 FETCHCOMMAND="${FETCHCOMMAND} --quiet"
 RESUMECOMMAND="${RESUMECOMMAND} --quiet"
 
-COMMON_FLAGS="-march=native -O2 -pipe"
-CFLAGS="${COMMON_FLAGS}"
-CXXFLAGS="${COMMON_FLAGS}"
-RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native"
-GRUB_PLATFORMS="efi-64"
-LC_MESSAGES=C.utf8
+FEATURES="${FEATURES} getbinpkg binpkg-request-signature"
+EMERGE_DEFAULT_OPTS="--ask --verbose --quiet"
 EOF
 
 cp --dereference /etc/resolv.conf /mnt/gentoo/etc/

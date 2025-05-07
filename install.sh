@@ -39,14 +39,14 @@ DISK_DEVICE=${DISK_DEVICE:-/dev/nvme0n1}
 DISK_PARTITION_SEPARATOR=$([[ "${DISK_DEVICE}" == *"nvme"* ]] && echo 'p' || echo '')
 
 EFI_SIZE=${EFI_SIZE:-'+1G'}
-SWAP_SIZE=${SWAP_SIZE:-'+4G'}
+SWAP_SIZE=${SWAP_SIZE:-'+8G'}
 ROOT_SIZE=${ROOT_SIZE:-'" "'}
 
 TIMEZONE=${TIMEZONE:-'Europe/Lisbon'}
 KEYMAP=${KEYMAP:-'pt-latin9'}
 
-LATEST_RELEASE=$(wget -qO- "${LATEST_METADATA}")
-LATEST_BUILD=$(grep -oE '.*/stage3-amd64-openrc-[0-9]*T[0-9]*Z.tar.xz' <<<"${LATEST_RELEASE}")
+LATEST_RELEASE=$(wget --output-document=- --quiet "${LATEST_METADATA}")
+LATEST_BUILD=$(grep --only-matching --extended-regexp '.*/stage3-amd64-openrc-[0-9]*T[0-9]*Z.tar.xz' <<<"${LATEST_RELEASE}")
 LATEST_STAGE="https://distfiles.gentoo.org/releases/amd64/autobuilds/${LATEST_BUILD}"
 
 echo -e "
@@ -64,8 +64,8 @@ read -r -p 'Do you want to continue? (Y/n): ' CONFIRMATION && echo ''
 [[ ${CONFIRMATION} == 'n' || ${THIS_CONFIRMATION} == 'N' ]] && exit 0
 
 read -ra ALL_PARTITIONS <<<"$(blkid | grep -oE "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}\\w*" | xargs)"
-wipefs -a "${ALL_PARTITIONS[@]}" "${DISK_DEVICE}"
-sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' <<EOF | fdisk "${DISK_DEVICE}"
+yes | wipefs --all "${ALL_PARTITIONS[@]}" "${DISK_DEVICE}"
+sed --expression='s/\s*\([\+0-9a-zA-Z]*\).*/\1/' <<EOF | fdisk "${DISK_DEVICE}"
     g  # create empty GPT partition table
     n  # create EFI partition
     # choose default partition number
@@ -73,6 +73,7 @@ sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' <<EOF | fdisk "${DISK_DEVICE}"
     ${EFI_SIZE}
     t  # create EFI partition type
     1  # EFI system type
+
     n  # create SWAP partition
     # choose default partition number
     # choose default sector number
@@ -80,6 +81,7 @@ sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' <<EOF | fdisk "${DISK_DEVICE}"
     t  # create SWAP partition type
     # choose default partition number
     19 # Linux swap type
+
     n  # create ROOT partition
     # choose default partition number
     # choose default sector number
@@ -87,64 +89,77 @@ sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' <<EOF | fdisk "${DISK_DEVICE}"
     t  # create ROOT partition type
     # choose default partition number
     23 # Linux root (x86-64) type
+
     p  # print partition table
     w  # write changes to disk
 EOF
 
-mkfs.fat -F 32 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" # fat32 BOOT
-mkswap "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"         # swap SWAP
-swapon "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"         # activates swap
-mkfs.ext4 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3"      # ext4 ROOT
+yes | mkfs.fat -F 32 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" # fat32 BOOT
+yes | mkswap "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"         # swap SWAP
+yes | mkfs.ext4 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3"      # ext4 ROOT
 
-mkdir -p /mnt/gentoo
-mount "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3" /mnt/gentoo
-mkdir -p /mnt/gentoo/efi
-mount "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/gentoo/efi
-cd /mnt/gentoo || exit 1
+swapon "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"
+mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3" /mnt
+mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/boot
+cd /mnt || exit 1
 
 chronyd -q
 wget "${LATEST_STAGE}" || exit 1
-tar xpf stage3-*.tar.xz --xattrs-include='*.*' --numeric-owner -C /mnt/gentoo
+tar fpx stage3-*.tar.xz --directory='/mnt' --numeric-owner --xattrs-include='*.*'
 
-rm -rf /mnt/gentoo/etc/portage/package.*
-touch /mnt/gentoo/etc/portage/{package.accept_keywords,package.license,package.mask,package.use}
-cat <<'EOF' >>/mnt/gentoo/etc/portage/make.conf
-
-# The above configuration is shipped by default
-# Any configuration following this comment will override it
+rm --force --recursive /mnt/etc/portage/package.*
+touch /mnt/etc/portage/{package.accept_keywords,package.license,package.mask,package.use}
+cat <<'EOF' >/mnt/etc/portage/make.conf
+# architecture support
 COMMON_FLAGS="-march=native -O2 -pipe"
+RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native"
+
+CFLAGS="${COMMON_FLAGS}"
 CXXFLAGS="${COMMON_FLAGS}"
 FCFLAGS="${COMMON_FLAGS}"
 FFLAGS="${COMMON_FLAGS}"
 
-RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native"
-GRUB_PLATFORMS="efi-64"
-
+# quiet data fetch
 FETCHCOMMAND="${FETCHCOMMAND} --quiet"
 RESUMECOMMAND="${RESUMECOMMAND} --quiet"
 
-FEATURES="${FEATURES} getbinpkg binpkg-request-signature"
+GRUB_PLATFORMS="efi-64"
+LC_MESSAGES=C.utf8
+
+# binaries support
+FEATURES="${FEATURES} binpkg-request-signature getbinpkg"
 EMERGE_DEFAULT_OPTS="--ask --verbose --quiet"
 EOF
 
-cp --dereference /etc/resolv.conf /mnt/gentoo/etc/
-mount --types proc /proc /mnt/gentoo/proc
-mount --rbind /sys /mnt/gentoo/sys
-mount --make-rslave /mnt/gentoo/sys
-mount --rbind /dev /mnt/gentoo/dev
-mount --make-rslave /mnt/gentoo/dev
-mount --bind /run /mnt/gentoo/run
-mount --make-slave /mnt/gentoo/run
+AVAILABLE_RAM=$((($(free | awk '/Mem:/ {print $7}') / (1024 * 1024) + 1) / 2))
+AVAILABLE_THREADS=$(($(nproc) + 1))
+MAKE_OPTS_JOBS=$((AVAILABLE_RAM < AVAILABLE_THREADS ? AVAILABLE_RAM : AVAILABLE_THREADS))
+cat <<EOF >>/mnt/etc/portage/make.conf
+
+# WIP: other optimizations could be tmpfs of portage in zram, ccache and binhost
+# computed values based on ram and threads
+EMERGE_DEFAULT_OPTS="\${EMERGE_DEFAULT_OPTS} --jobs $(awk '{print int(($1 + 1) / 2)}' <<<${MAKE_OPTS_JOBS}) --load-average $(("${MAKE_OPTS_JOBS}" + 1))"
+MAKEOPTS="--jobs ${MAKE_OPTS_JOBS} --load-average $(("${MAKE_OPTS_JOBS}" + 1))"
+EOF
+
+cp --dereference /etc/resolv.conf /mnt/etc/
+mount --types proc /proc /mnt/proc
+mount --rbind /sys /mnt/sys
+mount --make-rslave /mnt/sys
+mount --rbind /dev /mnt/dev
+mount --make-rslave /mnt/dev
+mount --bind /run /mnt/run
+mount --make-slave /mnt/run
 
 export DISK_DEVICE DISK_PARTITION_SEPARATOR TIMEZONE SYSTEM_HOSTNAME PASSWORD KEYMAP
 CHROOT_SCRIPT=$(mktemp)
-wget -qO- "${LATEST_CHROOT_SCRIPT}" >"${CHROOT_SCRIPT}" || exit 1
-{ eval "echo \"$(sed 's/"/\\"/g')\""; } <"${CHROOT_SCRIPT}" >/mnt/gentoo/chroot.sh
-rm -f "${CHROOT_SCRIPT}"
+wget --output-document=- --quiet "${LATEST_CHROOT_SCRIPT}" >"${CHROOT_SCRIPT}" || exit 1
+{ eval "echo \"$(sed 's/"/\\"/g')\""; } <"${CHROOT_SCRIPT}" >/mnt/chroot.sh
+rm --force "${CHROOT_SCRIPT}"
 
-chroot /mnt/gentoo /bin/bash <<'EOF'
+chroot /mnt /bin/bash <<'EOF'
 env-update && source /etc/profile
 source /chroot.sh
-rm /chroot.sh
-rm /stage3-*.tar.*
+rm --force /chroot.sh
+rm --force /stage3-*.tar.*
 EOF

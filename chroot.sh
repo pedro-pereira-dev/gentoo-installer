@@ -18,7 +18,7 @@ emerge --ask=n sys-kernel/installkernel sys-kernel/linux-firmware
 mkdir --parents /boot/efi
 sed --in-place 's/.*GRUB_CMDLINE_LINUX_DEFAULT.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet"/g' /etc/default/grub
 sed --in-place 's/.*GRUB_TIMEOUT.*/GRUB_TIMEOUT=1/g' /etc/default/grub
-grub-install --bootloader-id='Gentoo Grub' --efi-directory=/boot/efi --target=x86_64-efi
+grub-install --efi-directory=/boot/efi --target=x86_64-efi
 emerge --ask=n sys-kernel/gentoo-kernel-bin
 
 cat <<EOF >/etc/fstab

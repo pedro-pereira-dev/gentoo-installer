@@ -97,13 +97,14 @@ EOF
 yes | mkfs.fat -F 32 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" # fat32 BOOT
 yes | mkswap "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"         # swap SWAP
 yes | mkfs.ext4 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3"      # ext4 ROOT
+fatlabel "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" ESP
 
 swapon "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"
 mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3" /mnt
-mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/boot
-cd /mnt || exit 1
+mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/boot/efi
 
 chronyd -q
+cd /mnt || exit 1
 wget "${LATEST_STAGE}" || exit 1
 tar fpx stage3-*.tar.xz --directory='/mnt' --numeric-owner --xattrs-include='*.*'
 

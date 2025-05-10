@@ -63,7 +63,7 @@ All data from disk ${DISK_DEVICE} will be erased!"
 read -r -p 'Do you want to continue? (Y/n): ' CONFIRMATION && echo ''
 [[ ${CONFIRMATION} == 'n' || ${THIS_CONFIRMATION} == 'N' ]] && exit 0
 
-read -ra ALL_PARTITIONS <<<"$(blkid | grep -oE "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}\\w*" | xargs)"
+read -r -a ALL_PARTITIONS <<<"$(blkid | grep -oE "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}\\w*" | xargs)"
 yes | wipefs --all "${ALL_PARTITIONS[@]}" "${DISK_DEVICE}"
 sed --expression='s/\s*\([\+0-9a-zA-Z]*\).*/\1/' <<EOF | fdisk "${DISK_DEVICE}"
     g  # create empty GPT partition table
@@ -97,16 +97,14 @@ EOF
 yes | mkfs.fat -F 32 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" # fat32 BOOT
 yes | mkswap "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"         # swap SWAP
 yes | mkfs.ext4 "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3"      # ext4 ROOT
-fatlabel "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" ESP
 
 swapon "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"
 mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3" /mnt
-mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/boot/efi
+mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/boot
 
 chronyd -q
-cd /mnt || exit 1
-wget "${LATEST_STAGE}" || exit 1
-tar fpx stage3-*.tar.xz --directory='/mnt' --numeric-owner --xattrs-include='*.*'
+wget --output-document=- --quiet "${LATEST_STAGE}" >/mnt/stage3-current.tar.xz || exit 1
+tar fpx /mnt/stage3-current.tar.xz --directory='/mnt' --numeric-owner --xattrs-include='*.*'
 
 rm --force --recursive /mnt/etc/portage/package.*
 touch /mnt/etc/portage/{package.accept_keywords,package.license,package.mask,package.use}
@@ -132,15 +130,16 @@ FEATURES="${FEATURES} binpkg-request-signature getbinpkg"
 EMERGE_DEFAULT_OPTS="--ask --verbose --quiet"
 EOF
 
-AVAILABLE_RAM=$((($(free | awk '/Mem:/ {print $7}') / (1024 * 1024) + 1) / 2))
-AVAILABLE_THREADS=$(($(nproc) + 1))
+AVAILABLE_RAM=$((($(free | awk '/Mem:/ {print $7}') / (1024 * 1024)) / 2))
+AVAILABLE_THREADS=$(nproc)
 MAKE_OPTS_JOBS=$((AVAILABLE_RAM < AVAILABLE_THREADS ? AVAILABLE_RAM : AVAILABLE_THREADS))
 cat <<EOF >>/mnt/etc/portage/make.conf
 
-# WIP: other optimizations could be tmpfs of portage in zram, ccache and binhost
 # computed values based on ram and threads
 EMERGE_DEFAULT_OPTS="\${EMERGE_DEFAULT_OPTS} --jobs $(awk '{print int(($1 + 1) / 2)}' <<<${MAKE_OPTS_JOBS}) --load-average $(("${MAKE_OPTS_JOBS}" + 1))"
 MAKEOPTS="--jobs ${MAKE_OPTS_JOBS} --load-average $(("${MAKE_OPTS_JOBS}" + 1))"
+
+# WIP: other optimizations could be tmpfs of portage in zram, ccache and binhost
 EOF
 
 cp --dereference /etc/resolv.conf /mnt/etc/
@@ -162,5 +161,5 @@ chroot /mnt /bin/bash <<'EOF'
 env-update && source /etc/profile
 source /chroot.sh
 rm --force /chroot.sh
-rm --force /stage3-*.tar.*
+rm --force /stage3-current.tar.xz
 EOF

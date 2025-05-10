@@ -96,7 +96,7 @@ mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3" /mnt
 mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/boot
 
 dinitctl start ntpd
-basestrap /mnt base dinit efibootmgr elogind-dinit grub linux linux-firmware
+basestrap /mnt base connman-dinit dinit efibootmgr elogind-dinit grub linux linux-firmware
 fstabgen -U /mnt >>/mnt/etc/fstab
 
 export DISK_DEVICE DISK_PARTITION_SEPARATOR TIMEZONE SYSTEM_HOSTNAME PASSWORD KEYMAP

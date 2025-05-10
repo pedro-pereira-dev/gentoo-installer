@@ -10,6 +10,8 @@ sed --in-place 's/.*GRUB_TIMEOUT.*/GRUB_TIMEOUT=1/g' /etc/default/grub
 grub-install --efi-directory=/boot --removable --target=x86_64-efi
 grub-mkconfig -o /boot/grub/grub.cfg
 
+ln --force --symbolic ../connmand /etc/dinit.d/boot.d/
+
 echo "${SYSTEM_HOSTNAME}" >/etc/hostname
 cat <<EOF >/etc/hosts
 # IPv4 and IPv6 localhost aliases

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-LATEST_CHROOT_SCRIPT='https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/artix/chroot.sh'
+LATEST_CHROOT_SCRIPT='https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/arch/chroot.sh'
 
 function usage() {
   echo -e "\nUsage: $(basename "$0")
@@ -95,9 +95,9 @@ swapon "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}2"
 mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3" /mnt
 mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/boot
 
-dinitctl start ntpd
-basestrap /mnt base connman-dinit dinit efibootmgr elogind-dinit grub linux linux-firmware
-fstabgen -U /mnt >>/mnt/etc/fstab
+timedatectl
+pacstrap -K /mnt base connman efibootmgr grub linux linux-firmware
+genfstab -U /mnt >>/mnt/etc/fstab
 
 export DISK_DEVICE DISK_PARTITION_SEPARATOR TIMEZONE SYSTEM_HOSTNAME PASSWORD KEYMAP
 CHROOT_SCRIPT=$(mktemp)
@@ -105,7 +105,7 @@ wget --output-document=- --quiet "${LATEST_CHROOT_SCRIPT}" >"${CHROOT_SCRIPT}" |
 { eval "echo \"$(sed 's/"/\\"/g')\""; } <"${CHROOT_SCRIPT}" >/mnt/chroot.sh
 rm "${CHROOT_SCRIPT}"
 
-artix-chroot /mnt <<'EOF'
+arch-chroot /mnt <<'EOF'
 source /chroot.sh
 rm /chroot.sh
 EOF

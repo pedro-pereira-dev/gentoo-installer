@@ -10,7 +10,7 @@ sed --in-place 's/.*GRUB_TIMEOUT.*/GRUB_TIMEOUT=1/g' /etc/default/grub
 grub-install --efi-directory=/boot --removable --target=x86_64-efi
 grub-mkconfig -o /boot/grub/grub.cfg
 
-systemctl enable connman
+systemctl enable NetworkManager
 
 echo "KEYMAP=${KEYMAP}" >/etc/vconsole.conf
 echo 'LANG=en_US.UTF-8' >/etc/locale.conf

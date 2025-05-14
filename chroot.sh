@@ -12,11 +12,13 @@ env-update && source /etc/profile
 
 echo 'sys-kernel/installkernel dracut grub' >>/etc/portage/package.use
 echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE' >>/etc/portage/package.license
-emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware
+emerge --ask=n net-misc/connman sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware
 sed --in-place 's/.*GRUB_CMDLINE_LINUX_DEFAULT.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet"/g' /etc/default/grub
 sed --in-place 's/.*GRUB_TIMEOUT.*/GRUB_TIMEOUT=1/g' /etc/default/grub
 grub-install --efi-directory=/boot --removable --target=x86_64-efi
 grub-mkconfig -o /boot/grub/grub.cfg
+
+rc-update add connman default
 
 sed --in-place 's/keymap="us"/keymap="'"${KEYMAP}"'"/g' /etc/conf.d/keymaps
 

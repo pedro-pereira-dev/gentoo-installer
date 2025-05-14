@@ -96,7 +96,7 @@ mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}3" /mnt
 mount --mkdir "${DISK_DEVICE}${DISK_PARTITION_SEPARATOR}1" /mnt/boot
 
 timedatectl
-pacstrap -K /mnt base efibootmgr grub iwd linux linux-firmware
+pacstrap -K /mnt base iwd linux linux-firmware
 genfstab -U /mnt >>/mnt/etc/fstab
 
 export DISK_DEVICE DISK_PARTITION_SEPARATOR TIMEZONE SYSTEM_HOSTNAME PASSWORD KEYMAP

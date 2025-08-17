@@ -1,21 +1,56 @@
 # Gentoo Installer
 
-Gentoo installation script for `amd64` with `openRC`. This script is intended to create a default gentoo base system with a distribution kernel and `doas` instead of `sudo`, as well as `networkmanager` for managing network interfaces.
+This project provides an **opinionated, minimal installation script for Gentoo Linux** on the **`amd64`** architecture with **OpenRC**. The goal is to set up a functional base system with a distribution kernel, streamlining a process that can be complex.
 
-### Disclaimer
+-----
 
-This project can be used as reference for different solutions but is not the final and ultimate approach for every use case. Any contribution either in the form of issues discovering, pull requests or ideas are welcome.
+## Disclaimer
 
-## Install
+This script is a specific solution and may not be suitable for every use case. It is intended as a reference, and contributions - whether bug reports, pull requests, or new ideas - are always welcome.
 
-To install gentoo using this project, boot up a live ISO system and run the following command to download this installation script and run it with `bash` from an elevated shell session.
+-----
 
-This script was tested only with Ubuntu but will most likely work (famous last words) with any of the major Linux distributions as dependencies are quite common, such as `wget`, `tar`, etc.
+## Quick Installation
+
+To use this script, boot from a live Linux ISO and run the following command from an elevated shell (as `root`). This command downloads the script and executes it directly with `bash`.
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh) \
-  --hostname 'host' --username 'user'                                                                             \
-  --device 'nvme0n1' --device-separator 'p'                                                                       \
-  --efi-size '+1G' --swap-size '+32G' --root-size '+64G'                                                          \
-  --timezone 'Europe/Lisbon' --keymap 'pt-latin9'
+bash <(wget -qO- https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh)   \
+    --hostname 'my-gentoo-host'                                                                                     \
+    --password 'your_password'                                                                                      \
+    --boot '/dev/sda1'                                                                                              \
+    --root '/dev/sda2'                                                                                              \
+    --timezone 'Europe/Lisbon'                                                                                      \
+    --keymap 'pt-latin9'
+```
+
+### Dependencies
+
+The only required dependency is **`wget`**.
+
+### Disk preparations - example
+
+Using `fdisk` as the formatting software and `/dev/sda` as the example block device to prepare:
+
+```bash
+sed --expression='s/\s*\([\+0-9a-zA-Z]*\).*/\1/' <<EOF | fdisk /dev/sda
+    g  # create empty GPT partition table
+    n  # create boot partition
+    # choose default partition number
+    # choose default sector number
+    ${BOOT_SIZE}
+    t  # label partition type
+    1  # EFI system type
+
+    n  # create root partition
+    # choose default partition number
+    # choose default sector number
+    ${ROOT_SIZE}
+    t  # label partition type
+    # choose default partition number
+    23 # Linux root (x86-64) type
+
+    p  # print partition table
+    w  # write changes to disk
+EOF
 ```

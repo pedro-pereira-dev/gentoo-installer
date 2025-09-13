@@ -45,7 +45,7 @@ PORTAGE_JOBS=$(((MAKE_OPTS_JOBS + 1) / 2))                                      
 cat <<EOF >/mnt/etc/portage/make.conf
 # these settings were set by the installation script
 # please consult /etc/portage/make.conf.bak for the original configuration
-COMMON_FLAGS="-O2 -pipe -march=native"
+COMMON_FLAGS="-march=native -pipe -O2"
 RUSTFLAGS="\${RUSTFLAGS} -C target-cpu=native"
 CFLAGS="\${COMMON_FLAGS}"
 CXXFLAGS="\${COMMON_FLAGS}"
@@ -53,12 +53,12 @@ FCFLAGS="\${COMMON_FLAGS}"
 FFLAGS="\${COMMON_FLAGS}"
 
 # this quiets the fetching operations to reduce verbosity
-FETCHCOMMAND="\${FETCHCOMMAND} --quiet"
-RESUMECOMMAND="\${RESUMECOMMAND} --quiet"
+FETCHCOMMAND="\${FETCHCOMMAND} -q"
+RESUMECOMMAND="\${RESUMECOMMAND} -q"
 
 # this sets the language of build output to english
 # and system bootloader platform
-LC_MESSAGES=C.utf8
+LC_MESSAGES="C.utf8"
 GRUB_PLATFORMS="${BOOT_PLATFORM}"
 
 # this sets the computed default value for emerge jobs

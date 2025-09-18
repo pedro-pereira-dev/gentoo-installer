@@ -1,5 +1,4 @@
 #!/bin/bash
-set -eou pipefail
 
 ln -fs '/usr/share/zoneinfo/{{SYSTEM_TIMEZONE}}' /etc/localtime
 sed --in-place 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' /etc/locale.gen

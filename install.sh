@@ -1,6 +1,5 @@
 #!/bin/bash
 # shellcheck source=/dev/null
-set -eou pipefail
 
 LATEST_METADATA='https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-stage3-amd64-openrc.txt'
 LATEST_CHROOT_SCRIPT='https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/chroot.sh'

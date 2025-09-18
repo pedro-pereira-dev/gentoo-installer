@@ -1,39 +1,39 @@
 #!/bin/bash
+# shellcheck source=/dev/null
+set -eou pipefail
 
 LATEST_METADATA='https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-stage3-amd64-openrc.txt'
 LATEST_CHROOT_SCRIPT='https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/chroot.sh'
 LATEST_INTERACTIVE_SCRIPT='https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/interactive.sh'
 
-INTERACTIVE_SCRIPT=$(mktemp)
-wget --output-document "${INTERACTIVE_SCRIPT}" --quiet "${LATEST_INTERACTIVE_SCRIPT}" || exit 1
-# shellcheck source=/dev/null
-source "${INTERACTIVE_SCRIPT}"
-rm "${INTERACTIVE_SCRIPT}"
-
-if [ -d /sys/firmware/efi ]; then
-  BOOT_FS='fat -F 32'
-  BOOT_MOUNT='/mnt/efi'
-  BOOT_PLATFORM='efi-64'
-else
-  BOOT_FS='ext4'
-  BOOT_MOUNT='/mnt/boot'
-  BOOT_PLATFORM='pc'
-fi
-
-yes | mkfs."${BOOT_FS}" "${SYSTEM_BOOT_DEVICE}" # boot partition with FAT32 for UEFI and EXT4 for BIOS
-yes | mkfs.ext4 "${SYSTEM_ROOT_DEVICE}"         # root partition with EXT4
-
-mount --mkdir "${SYSTEM_ROOT_DEVICE}" /mnt
-mount --mkdir "${SYSTEM_BOOT_DEVICE}" "${BOOT_MOUNT}"
-
 LATEST_RELEASE=$(wget --output-document - --quiet "${LATEST_METADATA}")
 LATEST_BUILD=$(grep --only-matching --extended-regexp '.*/stage3-amd64-openrc-[0-9]*T[0-9]*Z.tar.xz' <<<"${LATEST_RELEASE}")
 LATEST_STAGE="https://distfiles.gentoo.org/releases/amd64/autobuilds/${LATEST_BUILD}"
 
-wget --output-document /mnt/stage3-current.tar.xz "${LATEST_STAGE}" || exit 1
-pv /mnt/stage3-current.tar.xz | tar --directory /mnt --extract --file - --numeric-owner --preserve-permissions --xattrs-include='*.*' --xz
-mkdir --parents /mnt/etc/portage/{package.accept_keywords,package.env,package.license,package.mask,package.use}
-cp /mnt/etc/portage/make.conf /mnt/etc/portage/make.conf.bak
+INTERACTIVE_SCRIPT=$(mktemp)
+wget --output-document "${INTERACTIVE_SCRIPT}" --quiet "${LATEST_INTERACTIVE_SCRIPT}" || exit 1
+source "${INTERACTIVE_SCRIPT}"
+rm "${INTERACTIVE_SCRIPT}"
+
+BOOT_FS='mkfs.ext4'
+BOOT_MOUNT='/mnt/boot'
+BOOT_PLATFORM='pc'
+if [ -d /sys/firmware/efi ]; then
+  BOOT_FS='mkfs.fat -F 32'
+  BOOT_MOUNT='/mnt/efi'
+  BOOT_PLATFORM='efi-64'
+fi
+
+yes | $BOOT_FS "$SYSTEM_BOOT_DEVICE"    # boot partition with FAT32 for UEFI and EXT4 for BIOS
+yes | mkfs.ext4 "${SYSTEM_ROOT_DEVICE}" # root partition with EXT4
+
+mount -m "$SYSTEM_ROOT_DEVICE" /mnt
+mount -m "$SYSTEM_BOOT_DEVICE" "$BOOT_MOUNT"
+
+wget --output-document /mnt/stage3-current.tar.xz "$LATEST_STAGE"
+tar --directory /mnt --extract --file /mnt/stage3-current.tar.xz --numeric-owner --preserve-permissions --xattrs-include='*.*' --xz
+rm -fr /mnt/etc/portage/package.*
+cp /mnt/etc/portage/make.conf /mnt/etc/portage/make.conf.old
 
 AVAILABLE_RAM=$(($(free --giga | awk '/Mem:/ {print $2}') / 2))                           # RAM in GB divided by 2GB
 AVAILABLE_THREADS=$(nproc)                                                                # number of threads
@@ -45,7 +45,7 @@ PORTAGE_JOBS=$(((MAKE_OPTS_JOBS + 1) / 2))                                      
 cat <<EOF >/mnt/etc/portage/make.conf
 # these settings were set by the installation script
 # please consult /etc/portage/make.conf.bak for the original configuration
-COMMON_FLAGS="-march=native -pipe -O2"
+COMMON_FLAGS="-march=native -O2 -pipe"
 RUSTFLAGS="\${RUSTFLAGS} -C target-cpu=native"
 CFLAGS="\${COMMON_FLAGS}"
 CXXFLAGS="\${COMMON_FLAGS}"
@@ -59,13 +59,13 @@ RESUMECOMMAND="\${RESUMECOMMAND} -q"
 # this sets the language of build output to english
 # and system bootloader platform
 LC_MESSAGES="C.utf8"
-GRUB_PLATFORMS="${BOOT_PLATFORM}"
+GRUB_PLATFORMS="$BOOT_PLATFORM"
 
 # this sets the computed default value for emerge jobs
 # as well as defaulting to binaries
-EMERGE_DEFAULT_OPTS="--ask --jobs ${PORTAGE_JOBS} --load-average ${LOAD_AVERAGE_JOBS} --quiet --verbose"
+EMERGE_DEFAULT_OPTS="--ask --jobs $PORTAGE_JOBS --load-average $LOAD_AVERAGE_JOBS --quiet --verbose"
 FEATURES="\${FEATURES} binpkg-request-signature getbinpkg"
-MAKEOPTS="--jobs ${MAKE_OPTS_JOBS} --load-average ${LOAD_AVERAGE_JOBS}"
+MAKEOPTS="--jobs $MAKE_OPTS_JOBS --load-average $LOAD_AVERAGE_JOBS"
 EOF
 
 cp --dereference /etc/resolv.conf /mnt/etc/

@@ -1,13 +1,14 @@
 #!/bin/bash
-
-ln -fs '/usr/share/zoneinfo/{{SYSTEM_TIMEZONE}}' /etc/localtime
-sed --in-place 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' /etc/locale.gen
-sed --in-place 's/keymap="us"/keymap="{{SYSTEM_KEYMAP}}"/g' /etc/conf.d/keymaps
-locale-gen && eselect locale set 4
 # shellcheck source=/dev/null
-env-update && source /etc/profile
 
 emerge-webrsync
+
+ln -fs '/usr/share/zoneinfo/{{SYSTEM_TIMEZONE}}' /etc/localtime
+sed --in-place 's/# en_US.UTF-8/en_US.UTF-8/g' /etc/locale.gen
+sed --in-place 's/keymap="us"/keymap="{{SYSTEM_KEYMAP}}"/g' /etc/conf.d/keymaps
+locale-gen && eselect locale set 4
+env-update && source /etc/profile
+
 echo 'sys-kernel/installkernel dracut grub' >/etc/portage/package.use
 echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE' >/etc/portage/package.license
 emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware
@@ -22,7 +23,6 @@ if [ -d /sys/firmware/efi ]; then
   GRUB_CONFIG='/efi/EFI/Gentoo/grub.cfg'
   GRUB_INSTALL='--efi-directory=/efi'
 fi
-
 grub-install "$GRUB_INSTALL"
 grub-mkconfig -o "$GRUB_CONFIG"
 

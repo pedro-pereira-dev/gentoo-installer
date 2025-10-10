@@ -1,35 +1,90 @@
-#!/bin/bash
-# shellcheck source=/dev/null
+#!/bin/sh
 
-LATEST_METADATA='https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-stage3-amd64-openrc.txt'
 LATEST_CHROOT_SCRIPT='https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/chroot.sh'
-LATEST_INTERACTIVE_SCRIPT='https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/interactive.sh'
 
-LATEST_RELEASE=$(wget --output-document - --quiet "${LATEST_METADATA}")
-LATEST_BUILD=$(grep --only-matching --extended-regexp '.*/stage3-amd64-openrc-[0-9]*T[0-9]*Z.tar.xz' <<<"${LATEST_RELEASE}")
-LATEST_STAGE="https://distfiles.gentoo.org/releases/amd64/autobuilds/${LATEST_BUILD}"
+is_aarch64() { test "$(uname -m)" = 'aarch64'; }
+is_amd64() { test "$(uname -m)" = 'x86_64'; }
 
-INTERACTIVE_SCRIPT=$(mktemp)
-wget --output-document "${INTERACTIVE_SCRIPT}" --quiet "${LATEST_INTERACTIVE_SCRIPT}" || exit 1
-source "${INTERACTIVE_SCRIPT}"
-rm "${INTERACTIVE_SCRIPT}"
+is_bios() { ! test -d '/sys/firmware/efi'; }
+is_uefi() { test -d '/sys/firmware/efi'; }
 
-BOOT_FS='mkfs.ext4'
-BOOT_MOUNT='/mnt/boot'
-BOOT_PLATFORM='pc'
-if [ -d /sys/firmware/efi ]; then
-  BOOT_FS='mkfs.fat -F 32'
-  BOOT_MOUNT='/mnt/efi'
-  BOOT_PLATFORM='efi-64'
-fi
+is_aarch64 && _ARCH='arm64'
+is_amd64 && _ARCH='amd64'
 
-yes | $BOOT_FS "$SYSTEM_BOOT_DEVICE"    # boot partition with FAT32 for UEFI and EXT4 for BIOS
-yes | mkfs.ext4 "${SYSTEM_ROOT_DEVICE}" # root partition with EXT4
+LATEST_METADATA="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/current-install-$_ARCH-minimal/latest-install-$_ARCH-minimal.txt"
+LATEST_BUILD=$(curl -Lfs "$LATEST_METADATA" | sed -n '6p' | cut -d' ' -f1)
+LATEST_STAGE="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/current-install-$_ARCH-minimal/$LATEST_BUILD"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --hostname) SYSTEM_HOSTNAME=$2 ;; --password) SYSTEM_PASSWORD=$2 ;;
+  --boot) SYSTEM_BOOT_DEVICE=$2 ;; --root) SYSTEM_ROOT_DEVICE=$2 ;;
+  --keymap) SYSTEM_KEYMAP=$2 ;; --timezone) SYSTEM_TIMEZONE=$2 ;;
+  esac
+  shift && shift
+done
+
+test -z "$SYSTEM_HOSTNAME" && while true; do
+  printf ' - System hostname: ' && read -r SYSTEM_HOSTNAME
+  test -n "$SYSTEM_HOSTNAME" && case "$SYSTEM_HOSTNAME" in
+  *[!a-zA-Z0-9-]* | '') ;;
+  *) break ;;
+  esac
+done
+test -z "$SYSTEM_PASSWORD" && while true; do
+  printf ' - System password: ' && read -r SYSTEM_PASSWORD
+  test -z "$SYSTEM_PASSWORD" && continue
+  printf ' - Confirm system password: ' && read -r PASSWORD_CONFIRMATION
+  test "$SYSTEM_PASSWORD" = "$PASSWORD_CONFIRMATION" && break
+done
+
+test -z "$SYSTEM_BOOT_DEVICE" && while true; do
+  printf ' - System boot device:' && read -r SYSTEM_BOOT_DEVICE
+  test -e "$SYSTEM_BOOT_DEVICE" && break
+done
+test -z "$SYSTEM_ROOT_DEVICE" && while true; do
+  printf ' - System root device:' && read -r SYSTEM_ROOT_DEVICE
+  test -e "$SYSTEM_ROOT_DEVICE" && break
+done
+
+test -z "$SYSTEM_TIMEZONE" &&
+  printf ' - System timezone: [Europe/Lisbon] ' && read -r SYSTEM_TIMEZONE
+SYSTEM_TIMEZONE=${SYSTEM_TIMEZONE:-'Europe/Lisbon'}
+test -z "$SYSTEM_KEYMAP" &&
+  printf ' - System keymap: [pt-latin9] ' && read -r SYSTEM_KEYMAP
+SYSTEM_KEYMAP=${SYSTEM_KEYMAP:-'pt-latin9'}
+
+printf 'Setup summary...\n'
+printf ' - System hostname: %s\n' "$SYSTEM_HOSTNAME"
+printf ' - System password: %s\n' "$SYSTEM_PASSWORD"
+printf ' - System boot device: %s\n' "$SYSTEM_BOOT_DEVICE"
+printf ' - System root device: %s\n' "$SYSTEM_ROOT_DEVICE"
+printf ' - System timezone: %s\n' "$SYSTEM_TIMEZONE"
+printf ' - System keymap: %s\n' "$SYSTEM_KEYMAP"
+printf '\n'
+printf 'All data from devices %s and %s will be erased!\n' "$SYSTEM_BOOT_DEVICE" "$SYSTEM_ROOT_DEVICE"
+printf 'Do you want to continue? [Y/n]: ' && read -r CONFIRMATION
+[ ! "$CONFIRMATION" = 'n' ] && [ ! "$THIS_CONFIRMATION" = 'N' ] || exit 0
+
+is_bios && BOOT_FS='mkfs.ext4'
+is_bios && BOOT_MOUNT='/mnt/boot'
+is_bios && BOOT_PLATFORM='pc'
+
+is_uefi && BOOT_FS='mkfs.fat -F 32'
+is_uefi && BOOT_MOUNT='/mnt/efi'
+is_uefi && BOOT_PLATFORM='efi-64'
+
+yes | $BOOT_FS "$SYSTEM_BOOT_DEVICE"  # boot partition with FAT32 for UEFI and EXT4 for BIOS
+yes | mkfs.ext4 "$SYSTEM_ROOT_DEVICE" # root partition with EXT4
 
 mount -m "$SYSTEM_ROOT_DEVICE" /mnt
 mount -m "$SYSTEM_BOOT_DEVICE" "$BOOT_MOUNT"
 
-wget --output-document /mnt/stage3-current.tar.xz "$LATEST_STAGE"
+curl -Lf "$LATEST_STAGE" >/mnt/stage3-current.tar.xz
+tar xpf /mnt/stage3-current.tar.xz -C /mnt --numeric-owner --xattrs-include='*.*'
+
+exit 0
+
 tar --directory /mnt --extract --file /mnt/stage3-current.tar.xz --numeric-owner --preserve-permissions --xattrs-include='*.*' --xz
 rm -fr /mnt/etc/portage/package.*
 cp /mnt/etc/portage/make.conf /mnt/etc/portage/make.conf.old

@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/sh
 
-function usage() {
+usage() {
   echo -e "
 Usage: ./$(basename "$0")
   --hostname <hostname>

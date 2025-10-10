@@ -11,9 +11,9 @@ is_uefi() { test -d '/sys/firmware/efi'; }
 is_aarch64 && _ARCH='arm64'
 is_amd64 && _ARCH='amd64'
 
-LATEST_METADATA="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/current-install-$_ARCH-minimal/latest-install-$_ARCH-minimal.txt"
+LATEST_METADATA="https://gentoo.osuosl.org/releases/$_ARCH/autobuilds/latest-stage3-$_ARCH-openrc.txt"
 LATEST_BUILD=$(curl -Lfs "$LATEST_METADATA" | sed -n '6p' | cut -d' ' -f1)
-LATEST_STAGE="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/current-install-$_ARCH-minimal/$LATEST_BUILD"
+LATEST_STAGE="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/$LATEST_BUILD"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -82,19 +82,18 @@ mount -m "$SYSTEM_BOOT_DEVICE" "$BOOT_MOUNT"
 
 curl -Lf "$LATEST_STAGE" >/mnt/stage3-current.tar.xz
 tar xpf /mnt/stage3-current.tar.xz -C /mnt --numeric-owner --xattrs-include='*.*'
-
-exit 0
-
-tar --directory /mnt --extract --file /mnt/stage3-current.tar.xz --numeric-owner --preserve-permissions --xattrs-include='*.*' --xz
 rm -fr /mnt/etc/portage/package.*
-cp /mnt/etc/portage/make.conf /mnt/etc/portage/make.conf.old
+cp /mnt/etc/portage/make.conf /mnt/etc/portage/make.conf.bak
 
-AVAILABLE_RAM=$(($(free --giga | awk '/Mem:/ {print $2}') / 2))                           # RAM in GB divided by 2GB
+AVAILABLE_RAM=$(($(free -g | awk '/Mem:/ {print $2}') / 2))                               # RAM in GB divided by 2GB
 AVAILABLE_THREADS=$(nproc)                                                                # number of threads
 MAKE_OPTS_JOBS=$((AVAILABLE_RAM < AVAILABLE_THREADS ? AVAILABLE_RAM : AVAILABLE_THREADS)) # min(RAM / 2GB, number of threads)
 MAKE_OPTS_JOBS=$((MAKE_OPTS_JOBS > 1 ? MAKE_OPTS_JOBS : 1))                               # max(make_opt_jobs, 1)
 LOAD_AVERAGE_JOBS=$((MAKE_OPTS_JOBS + 1))                                                 # max number of jobs plus one for io
 PORTAGE_JOBS=$(((MAKE_OPTS_JOBS + 1) / 2))                                                # ceiling of half max number of jobs
+
+is_aarch64 && _CHOST='aarch64-unknown-linux-gnu'
+is_amd64 && _CHOST=''
 
 cat <<EOF >/mnt/etc/portage/make.conf
 # these settings were set by the installation script
@@ -110,10 +109,11 @@ FFLAGS="\${COMMON_FLAGS}"
 FETCHCOMMAND="\${FETCHCOMMAND} -q"
 RESUMECOMMAND="\${RESUMECOMMAND} -q"
 
-# this sets the language of build output to english
-# and system bootloader platform
-LC_MESSAGES="C.utf8"
+
+# host machine dependent configurations
+CHOST="$_CHOST"
 GRUB_PLATFORMS="$BOOT_PLATFORM"
+LC_MESSAGES="C.utf8"
 
 # this sets the computed default value for emerge jobs
 # as well as defaulting to binaries
@@ -122,7 +122,7 @@ FEATURES="\${FEATURES} binpkg-request-signature getbinpkg"
 MAKEOPTS="--jobs $MAKE_OPTS_JOBS --load-average $LOAD_AVERAGE_JOBS"
 EOF
 
-cp --dereference /etc/resolv.conf /mnt/etc/
+cp -L /etc/resolv.conf /mnt/etc/
 mount --types proc /proc /mnt/proc
 mount --rbind /sys /mnt/sys
 mount --make-rslave /mnt/sys
@@ -132,19 +132,19 @@ mount --bind /run /mnt/run
 mount --make-slave /mnt/run
 
 CHROOT_SCRIPT=$(mktemp)
-wget --output-document "${CHROOT_SCRIPT}" --quiet "${LATEST_CHROOT_SCRIPT}" || exit 1
+curl -Lfs "$LATEST_CHROOT_SCRIPT" >"$CHROOT_SCRIPT"
 sed \
-  --expression="s|{{SYSTEM_HOSTNAME}}|${SYSTEM_HOSTNAME}|g" \
-  --expression="s|{{SYSTEM_PASSWORD}}|${SYSTEM_PASSWORD}|g" \
-  --expression="s|{{SYSTEM_BOOT_DEVICE}}|${SYSTEM_BOOT_DEVICE}|g" \
-  --expression="s|{{SYSTEM_ROOT_DEVICE}}|${SYSTEM_ROOT_DEVICE}|g" \
-  --expression="s|{{SYSTEM_KEYMAP}}|${SYSTEM_KEYMAP}|g" \
-  --expression="s|{{SYSTEM_TIMEZONE}}|${SYSTEM_TIMEZONE}|g" \
+  -e "s|{{SYSTEM_HOSTNAME}}|${SYSTEM_HOSTNAME}|g" \
+  -e "s|{{SYSTEM_PASSWORD}}|${SYSTEM_PASSWORD}|g" \
+  -e "s|{{SYSTEM_BOOT_DEVICE}}|${SYSTEM_BOOT_DEVICE}|g" \
+  -e "s|{{SYSTEM_ROOT_DEVICE}}|${SYSTEM_ROOT_DEVICE}|g" \
+  -e "s|{{SYSTEM_KEYMAP}}|${SYSTEM_KEYMAP}|g" \
+  -e "s|{{SYSTEM_TIMEZONE}}|${SYSTEM_TIMEZONE}|g" \
   "${CHROOT_SCRIPT}" >/mnt/chroot.sh
 rm "${CHROOT_SCRIPT}"
 
 chroot /mnt /bin/bash <<EOF
-env-update && source /etc/profile
+env-update 2>/dev/null && source /etc/profile
 source /chroot.sh
 rm /chroot.sh /stage3-current.tar.xz
 EOF

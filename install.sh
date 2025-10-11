@@ -1,6 +1,61 @@
 #!/bin/sh
+# shellcheck disable=SC2016
 
-LATEST_CHROOT_SCRIPT='https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/chroot.sh'
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --hostname) _HOST=$2 ;; --password) _PASSWORD=$2 ;;
+  --boot) _BOOT_DEV=$2 ;; --swap) _SWAP_DEV=$2 ;; --root) _ROOT_DEV=$2 ;;
+  --keymap) _KEYMAP=$2 ;; --timezone) _TIMEZONE=$2 ;;
+  esac
+  shift && shift
+done
+
+test -z "$_HOST" && while true; do
+  printf 'Hostname: ' && read -r _HOST
+  test -n "$_HOST" && case "$_HOST" in
+  *[!a-zA-Z0-9-]* | '') ;;
+  *) break ;;
+  esac
+done
+test -z "$_PASSWORD" && while true; do
+  printf 'Password: ' && read -r _PASSWORD
+  test -z "$_PASSWORD" && continue
+  printf 'Confirm password: ' && read -r _PASSWORD_CONFIRMATION
+  test "$_PASSWORD" = "$_PASSWORD_CONFIRMATION" && break
+done
+
+test -z "$_BOOT_DEV" && while true; do
+  printf 'Boot device:' && read -r _BOOT_DEV
+  test -e "$_BOOT_DEV" && break
+done
+test -z "$_SWAP_DEV" && while true; do
+  printf 'Swap device:' && read -r _SWAP_DEV
+  test -e "$_SWAP_DEV" && break
+done
+test -z "$_ROOT_DEV" && while true; do
+  printf 'Root device:' && read -r _ROOT_DEV
+  test -e "$_ROOT_DEV" && break
+done
+
+test -z "$_KEYMAP" &&
+  printf 'Keymap: [pt-latin9] ' && read -r _KEYMAP
+_KEYMAP=${_KEYMAP:-'pt-latin9'}
+test -z "$_TIMEZONE" &&
+  printf 'Timezone: [Europe/Lisbon] ' && read -r _TIMEZONE
+_TIMEZONE=${_TIMEZONE:-'Europe/Lisbon'}
+
+printf 'Installation details:\n'
+printf ' - System hostname: %s\n' "$_HOST"
+printf ' - System password: %s\n' "$_PASSWORD"
+printf ' - System boot device: %s\n' "$_BOOT_DEV"
+printf ' - System swap device: %s\n' "$_SWAP_DEV"
+printf ' - System root device: %s\n' "$_ROOT_DEV"
+printf ' - System keymap: %s\n' "$_KEYMAP"
+printf ' - System timezone: %s\n' "$_TIMEZONE"
+printf '\n'
+printf 'All data from devices %s, %s and %s will be erased!\n' "$_BOOT_DEV" "$_SWAP_DEV" "$_ROOT_DEV"
+printf 'Do you want to continue? [Y/n]: ' && read -r CONFIRMATION
+[ ! "$CONFIRMATION" = 'n' ] && [ ! "$THIS_CONFIRMATION" = 'N' ] || exit 0
 
 is_aarch64() { test "$(uname -m)" = 'aarch64'; }
 is_amd64() { test "$(uname -m)" = 'x86_64'; }
@@ -8,119 +63,63 @@ is_amd64() { test "$(uname -m)" = 'x86_64'; }
 is_bios() { ! test -d '/sys/firmware/efi'; }
 is_uefi() { test -d '/sys/firmware/efi'; }
 
+is_bios && _BOOT_FS='mkfs.ext4'
+is_bios && _BOOT_MOUNT='/mnt/boot'
+is_bios && _BOOT_PLATFORM='pc'
+
+is_uefi && _BOOT_FS='mkfs.fat -F 32'
+is_uefi && _BOOT_MOUNT='/mnt/efi'
+is_uefi && _BOOT_PLATFORM='efi-64'
+
+yes | $_BOOT_FS "$_BOOT_DEV" # boot partition with FAT32 for UEFI and EXT4 for BIOS
+yes | mkswap "$_SWAP_DEV"    # swap partition
+yes | mkfs.ext4 "$_ROOT_DEV" # root partition with EXT4
+
+mount -m "$_ROOT_DEV" /mnt
+swapon "$_SWAP_DEV"
+mount -m "$_BOOT_DEV" "$_BOOT_MOUNT"
+
 is_aarch64 && _ARCH='arm64'
 is_amd64 && _ARCH='amd64'
 
-LATEST_METADATA="https://gentoo.osuosl.org/releases/$_ARCH/autobuilds/latest-stage3-$_ARCH-openrc.txt"
-LATEST_BUILD=$(curl -Lfs "$LATEST_METADATA" | sed -n '6p' | cut -d' ' -f1)
-LATEST_STAGE="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/$LATEST_BUILD"
+_METADATA="https://gentoo.osuosl.org/releases/$_ARCH/autobuilds/latest-stage3-$_ARCH-openrc.txt"
+_BUILD=$(curl -Lfs "$_METADATA" | sed -n '6p' | cut -d' ' -f1)
+_STAGE_FILE="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/$_BUILD"
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-  --hostname) SYSTEM_HOSTNAME=$2 ;; --password) SYSTEM_PASSWORD=$2 ;;
-  --boot) SYSTEM_BOOT_DEVICE=$2 ;; --root) SYSTEM_ROOT_DEVICE=$2 ;;
-  --keymap) SYSTEM_KEYMAP=$2 ;; --timezone) SYSTEM_TIMEZONE=$2 ;;
-  esac
-  shift && shift
-done
-
-test -z "$SYSTEM_HOSTNAME" && while true; do
-  printf ' - System hostname: ' && read -r SYSTEM_HOSTNAME
-  test -n "$SYSTEM_HOSTNAME" && case "$SYSTEM_HOSTNAME" in
-  *[!a-zA-Z0-9-]* | '') ;;
-  *) break ;;
-  esac
-done
-test -z "$SYSTEM_PASSWORD" && while true; do
-  printf ' - System password: ' && read -r SYSTEM_PASSWORD
-  test -z "$SYSTEM_PASSWORD" && continue
-  printf ' - Confirm system password: ' && read -r PASSWORD_CONFIRMATION
-  test "$SYSTEM_PASSWORD" = "$PASSWORD_CONFIRMATION" && break
-done
-
-test -z "$SYSTEM_BOOT_DEVICE" && while true; do
-  printf ' - System boot device:' && read -r SYSTEM_BOOT_DEVICE
-  test -e "$SYSTEM_BOOT_DEVICE" && break
-done
-test -z "$SYSTEM_ROOT_DEVICE" && while true; do
-  printf ' - System root device:' && read -r SYSTEM_ROOT_DEVICE
-  test -e "$SYSTEM_ROOT_DEVICE" && break
-done
-
-test -z "$SYSTEM_TIMEZONE" &&
-  printf ' - System timezone: [Europe/Lisbon] ' && read -r SYSTEM_TIMEZONE
-SYSTEM_TIMEZONE=${SYSTEM_TIMEZONE:-'Europe/Lisbon'}
-test -z "$SYSTEM_KEYMAP" &&
-  printf ' - System keymap: [pt-latin9] ' && read -r SYSTEM_KEYMAP
-SYSTEM_KEYMAP=${SYSTEM_KEYMAP:-'pt-latin9'}
-
-printf 'Setup summary...\n'
-printf ' - System hostname: %s\n' "$SYSTEM_HOSTNAME"
-printf ' - System password: %s\n' "$SYSTEM_PASSWORD"
-printf ' - System boot device: %s\n' "$SYSTEM_BOOT_DEVICE"
-printf ' - System root device: %s\n' "$SYSTEM_ROOT_DEVICE"
-printf ' - System timezone: %s\n' "$SYSTEM_TIMEZONE"
-printf ' - System keymap: %s\n' "$SYSTEM_KEYMAP"
-printf '\n'
-printf 'All data from devices %s and %s will be erased!\n' "$SYSTEM_BOOT_DEVICE" "$SYSTEM_ROOT_DEVICE"
-printf 'Do you want to continue? [Y/n]: ' && read -r CONFIRMATION
-[ ! "$CONFIRMATION" = 'n' ] && [ ! "$THIS_CONFIRMATION" = 'N' ] || exit 0
-
-is_bios && BOOT_FS='mkfs.ext4'
-is_bios && BOOT_MOUNT='/mnt/boot'
-is_bios && BOOT_PLATFORM='pc'
-
-is_uefi && BOOT_FS='mkfs.fat -F 32'
-is_uefi && BOOT_MOUNT='/mnt/efi'
-is_uefi && BOOT_PLATFORM='efi-64'
-
-yes | $BOOT_FS "$SYSTEM_BOOT_DEVICE"  # boot partition with FAT32 for UEFI and EXT4 for BIOS
-yes | mkfs.ext4 "$SYSTEM_ROOT_DEVICE" # root partition with EXT4
-
-mount -m "$SYSTEM_ROOT_DEVICE" /mnt
-mount -m "$SYSTEM_BOOT_DEVICE" "$BOOT_MOUNT"
-
-curl -Lf "$LATEST_STAGE" >/mnt/stage3-current.tar.xz
+curl -Lf "$_STAGE_FILE" >/mnt/stage3-current.tar.xz
 tar xpf /mnt/stage3-current.tar.xz -C /mnt --numeric-owner --xattrs-include='*.*'
 rm -fr /mnt/etc/portage/package.*
-cp /mnt/etc/portage/make.conf /mnt/etc/portage/make.conf.bak
 
-AVAILABLE_RAM=$(($(free -g | awk '/Mem:/ {print $2}') / 2))                               # RAM in GB divided by 2GB
-AVAILABLE_THREADS=$(nproc)                                                                # number of threads
-MAKE_OPTS_JOBS=$((AVAILABLE_RAM < AVAILABLE_THREADS ? AVAILABLE_RAM : AVAILABLE_THREADS)) # min(RAM / 2GB, number of threads)
-MAKE_OPTS_JOBS=$((MAKE_OPTS_JOBS > 1 ? MAKE_OPTS_JOBS : 1))                               # max(make_opt_jobs, 1)
-LOAD_AVERAGE_JOBS=$((MAKE_OPTS_JOBS + 1))                                                 # max number of jobs plus one for io
-PORTAGE_JOBS=$(((MAKE_OPTS_JOBS + 1) / 2))                                                # ceiling of half max number of jobs
+_THREAD_RAM=$(($(free -g | awk '/Mem:/ {print $2}') / 2))       # RAM in GB divided by 2GB
+_THREADS=$(nproc)                                               # number of threads
+_MAKE_JOBS=$((_THREAD_RAM < _THREADS ? _THREAD_RAM : _THREADS)) # min(RAM / 2GB, number of threads)
+_MAKE_JOBS=$((_MAKE_JOBS > 1 ? _MAKE_JOBS : 1))                 # max(make_opt_jobs, 1)
+_LOAD_JOBS=$((_MAKE_JOBS + 1))                                  # max number of jobs plus one for io
+_PORTAGE_JOBS=$(((_MAKE_JOBS + 1) / 2))                         # ceiling of half max number of jobs
 
-is_aarch64 && _CHOST='aarch64-unknown-linux-gnu'
-is_amd64 && _CHOST=''
-
-cat <<EOF >/mnt/etc/portage/make.conf
-# these settings were set by the installation script
-# please consult /etc/portage/make.conf.bak for the original configuration
-COMMON_FLAGS="-march=native -O2 -pipe"
-RUSTFLAGS="\${RUSTFLAGS} -C target-cpu=native"
-CFLAGS="\${COMMON_FLAGS}"
-CXXFLAGS="\${COMMON_FLAGS}"
-FCFLAGS="\${COMMON_FLAGS}"
-FFLAGS="\${COMMON_FLAGS}"
-
-# this quiets the fetching operations to reduce verbosity
-FETCHCOMMAND="\${FETCHCOMMAND} -q"
-RESUMECOMMAND="\${RESUMECOMMAND} -q"
-
-
-# host machine dependent configurations
-CHOST="$_CHOST"
-GRUB_PLATFORMS="$BOOT_PLATFORM"
-LC_MESSAGES="C.utf8"
-
-# this sets the computed default value for emerge jobs
-# as well as defaulting to binaries
-EMERGE_DEFAULT_OPTS="--ask --jobs $PORTAGE_JOBS --load-average $LOAD_AVERAGE_JOBS --quiet --verbose"
-FEATURES="\${FEATURES} binpkg-request-signature getbinpkg"
-MAKEOPTS="--jobs $MAKE_OPTS_JOBS --load-average $LOAD_AVERAGE_JOBS"
-EOF
+mkdir -p /mnt/etc/portage/env
+echo '*/* custom.make.conf' >>/mnt/etc/portage/package.env
+{
+  echo '# values modified by the installation script'
+  echo 'COMMON_FLAGS="-march=native -O2 -pipe"'
+  echo 'RUSTFLAGS="$RUSTFLAGS -C target-cpu=native"'
+  echo 'CFLAGS="$COMMON_FLAGS"'
+  echo 'CXXFLAGS="$COMMON_FLAGS"'
+  echo 'FCFLAGS="$COMMON_FLAGS"'
+  echo 'FFLAGS="$COMMON_FLAGS"'
+  echo ''
+  echo '# quiet fetches'
+  echo 'FETCHCOMMAND="$FETCHCOMMAND -q"'
+  echo 'RESUMECOMMAND="$RESUMECOMMAND -q"'
+  echo ''
+  echo '# bootloader platform architecture'
+  echo "GRUB_PLATFORMS=\"$_BOOT_PLATFORM\""
+  echo ''
+  echo '# portage default options'
+  echo "EMERGE_DEFAULT_OPTS=\"--ask --jobs $_PORTAGE_JOBS --load-average $_LOAD_JOBS --quiet --verbose\""
+  echo "FEATURES=\"$FEATURES binpkg-request-signature getbinpkg\""
+  echo "MAKEOPTS=\"--jobs $_MAKE_JOBS --load-average $_LOAD_JOBS\""
+} >>/mnt/etc/portage/env/custom.make.conf
 
 cp -L /etc/resolv.conf /mnt/etc/
 mount --types proc /proc /mnt/proc
@@ -131,20 +130,36 @@ mount --make-rslave /mnt/dev
 mount --bind /run /mnt/run
 mount --make-slave /mnt/run
 
-CHROOT_SCRIPT=$(mktemp)
-curl -Lfs "$LATEST_CHROOT_SCRIPT" >"$CHROOT_SCRIPT"
-sed \
-  -e "s|{{SYSTEM_HOSTNAME}}|${SYSTEM_HOSTNAME}|g" \
-  -e "s|{{SYSTEM_PASSWORD}}|${SYSTEM_PASSWORD}|g" \
-  -e "s|{{SYSTEM_BOOT_DEVICE}}|${SYSTEM_BOOT_DEVICE}|g" \
-  -e "s|{{SYSTEM_ROOT_DEVICE}}|${SYSTEM_ROOT_DEVICE}|g" \
-  -e "s|{{SYSTEM_KEYMAP}}|${SYSTEM_KEYMAP}|g" \
-  -e "s|{{SYSTEM_TIMEZONE}}|${SYSTEM_TIMEZONE}|g" \
-  "${CHROOT_SCRIPT}" >/mnt/chroot.sh
-rm "${CHROOT_SCRIPT}"
+chroot /mnt /bin/bash -c 'emerge-webrsync'
+chroot /mnt /bin/bash -c "ln -fs '/usr/share/zoneinfo/$_TIMEZONE' /etc/localtime"
+chroot /mnt /bin/bash -c "sed -i 's/keymap=\"us\"/keymap=\"$_KEYMAP\"/g' /etc/conf.d/keymaps"
+chroot /mnt /bin/bash -c 'echo "en_US.UTF-8 UTF-8" >/etc/locale.gen'
+chroot /mnt /bin/bash -c 'locale-gen && eselect locale set 4'
+chroot /mnt /bin/bash -c 'env-update'
 
-chroot /mnt /bin/bash <<EOF
-env-update 2>/dev/null && source /etc/profile
-source /chroot.sh
-rm /chroot.sh /stage3-current.tar.xz
-EOF
+echo 'sys-kernel/installkernel dracut grub' >>/mnt/etc/portage/package.use
+echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE' >>/mnt/etc/portage/package.license
+chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware'
+
+is_bios && _BOOT_FSTAB="$_BOOT_DEV /boot ext4 defaults,noatime 0 2"
+is_bios && _GRUB_CONFIG='/boot/grub/grub.cfg'
+is_bios && _GRUB_INSTALL="$_BOOT_DEV"
+is_bios && _GRUB_INSTALL="${_GRUB_INSTALL%?}" # removes last character
+
+is_uefi && _BOOT_FSTAB="$_BOOT_DEV /efi vfat defaults,noatime,nodev,noexec,nosuid,dmask=0077,fmask=0177 0 2"
+is_uefi && is_aarch64 && _GRUB_CONFIG='/efi/EFI/gentoo/grubaa64.cfg'
+is_uefi && is_amd64 && _GRUB_CONFIG='/efi/EFI/gentoo/grub.cfg'
+is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
+
+chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL"
+chroot /mnt /bin/bash -c "grub-mkconfig -o $_GRUB_CONFIG"
+
+{
+  echo '# <fs> <mountpoint> <type> <opts> <dump> <pass>'
+  echo "$_BOOT_FSTAB"
+  echo "$_SWAP_DEV none swap sw 0 0"
+  echo "$_ROOT_DEV / ext4 defaults,noatime 0 1"
+} >/mnt/etc/fstab
+echo "$_HOST" >/mnt/etc/hostname
+echo "root:$_PASSWORD" | chroot /mnt /usr/sbin/chpasswd
+rm -fr /mnt/stage3-current.tar.xz

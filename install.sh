@@ -3,59 +3,59 @@
 
 while [ $# -gt 0 ]; do
   case "$1" in
-  --hostname) _HOST=$2 ;; --password) _PASSWORD=$2 ;;
+  --hostname) _HOSTNAME=$2 ;; --password) _PASSWORD=$2 ;;
   --boot) _BOOT_DEV=$2 ;; --swap) _SWAP_DEV=$2 ;; --root) _ROOT_DEV=$2 ;;
   --keymap) _KEYMAP=$2 ;; --timezone) _TIMEZONE=$2 ;;
   esac
   shift && shift
 done
 
-test -z "$_HOST" && while true; do
-  printf 'Hostname: ' && read -r _HOST
-  test -n "$_HOST" && case "$_HOST" in
+[ -z "$_HOSTNAME" ] && while true; do
+  printf 'Hostname: ' && read -r _HOSTNAME
+  [ -n "$_HOSTNAME" ] && case "$_HOSTNAME" in
   *[!a-zA-Z0-9-]* | '') ;;
   *) break ;;
   esac
 done
-test -z "$_PASSWORD" && while true; do
+[ -z "$_PASSWORD" ] && while true; do
   printf 'Password: ' && read -r _PASSWORD
-  test -z "$_PASSWORD" && continue
+  [ -z "$_PASSWORD" ] && continue
   printf 'Confirm password: ' && read -r _PASSWORD_CONFIRMATION
-  test "$_PASSWORD" = "$_PASSWORD_CONFIRMATION" && break
+  [ "$_PASSWORD" = "$_PASSWORD_CONFIRMATION" ] && break
 done
 
-test -z "$_BOOT_DEV" && while true; do
+[ -z "$_BOOT_DEV" ] && while true; do
   printf 'Boot device:' && read -r _BOOT_DEV
-  test -e "$_BOOT_DEV" && break
+  [ -e "$_BOOT_DEV" ] && break
 done
-test -z "$_SWAP_DEV" && while true; do
+[ -z "$_SWAP_DEV" ] && while true; do
   printf 'Swap device:' && read -r _SWAP_DEV
-  test -e "$_SWAP_DEV" && break
+  [ -e "$_SWAP_DEV" ] && break
 done
-test -z "$_ROOT_DEV" && while true; do
+[ -z "$_ROOT_DEV" ] && while true; do
   printf 'Root device:' && read -r _ROOT_DEV
-  test -e "$_ROOT_DEV" && break
+  [ -e "$_ROOT_DEV" ] && break
 done
 
-test -z "$_KEYMAP" &&
+[ -z "$_KEYMAP" ] &&
   printf 'Keymap: [pt-latin9] ' && read -r _KEYMAP
 _KEYMAP=${_KEYMAP:-'pt-latin9'}
-test -z "$_TIMEZONE" &&
+[ -z "$_TIMEZONE" ] &&
   printf 'Timezone: [Europe/Lisbon] ' && read -r _TIMEZONE
 _TIMEZONE=${_TIMEZONE:-'Europe/Lisbon'}
 
-printf 'Installation details:\n'
-printf ' - System hostname: %s\n' "$_HOST"
-printf ' - System password: %s\n' "$_PASSWORD"
-printf ' - System boot device: %s\n' "$_BOOT_DEV"
-printf ' - System swap device: %s\n' "$_SWAP_DEV"
-printf ' - System root device: %s\n' "$_ROOT_DEV"
-printf ' - System keymap: %s\n' "$_KEYMAP"
-printf ' - System timezone: %s\n' "$_TIMEZONE"
-printf '\n'
-printf 'All data from devices %s, %s and %s will be erased!\n' "$_BOOT_DEV" "$_SWAP_DEV" "$_ROOT_DEV"
-printf 'Do you want to continue? [Y/n]: ' && read -r CONFIRMATION
-[ ! "$CONFIRMATION" = 'n' ] && [ ! "$THIS_CONFIRMATION" = 'N' ] || exit 0
+echo 'Installation details:'
+echo " - System hostname: $_HOSTNAME"
+echo " - System password: $_PASSWORD"
+echo " - System boot device: $_BOOT_DEV"
+echo " - System swap device: $_SWAP_DEV"
+echo " - System root device: $_ROOT_DEV"
+echo " - System keymap: $_KEYMAP"
+echo " - System timezone: $_TIMEZONE"
+echo ''
+echo "All data from devices $_BOOT_DEV, $_SWAP_DEV and $_ROOT_DEV will be erased!"
+printf 'Do you want to continue? [Y/n]: ' && read -r _CONFIRMATION
+[ ! "$_CONFIRMATION" = 'n' ] && [ ! "$_CONFIRMATION" = 'N' ] || exit 0
 
 is_aarch64() { test "$(uname -m)" = 'aarch64'; }
 is_amd64() { test "$(uname -m)" = 'x86_64'; }
@@ -160,6 +160,6 @@ chroot /mnt /bin/bash -c "grub-mkconfig -o $_GRUB_CONFIG"
   echo "$_SWAP_DEV none swap sw 0 0"
   echo "$_ROOT_DEV / ext4 defaults,noatime 0 1"
 } >/mnt/etc/fstab
-echo "$_HOST" >/mnt/etc/hostname
+echo "$_HOSTNAME" >/mnt/etc/hostname
 echo "root:$_PASSWORD" | chroot /mnt /usr/sbin/chpasswd
 rm -fr /mnt/stage3-current.tar.xz

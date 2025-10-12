@@ -112,14 +112,16 @@ echo '*/* custom.make.conf' >>/mnt/etc/portage/package.env
   echo 'FETCHCOMMAND="$FETCHCOMMAND -q"'
   echo 'RESUMECOMMAND="$RESUMECOMMAND -q"'
   echo ''
-  echo '# bootloader platform architecture'
-  echo "GRUB_PLATFORMS=\"$_BOOT_PLATFORM\""
-  echo ''
   echo '# portage default options'
   echo "EMERGE_DEFAULT_OPTS=\"--ask --jobs $_PORTAGE_JOBS --load-average $_LOAD_JOBS --quiet --verbose\""
   echo "FEATURES=\"$FEATURES binpkg-request-signature getbinpkg\""
   echo "MAKEOPTS=\"--jobs $_MAKE_JOBS --load-average $_LOAD_JOBS\""
 } >>/mnt/etc/portage/env/custom.make.conf
+
+{
+  echo '# bootloader platform architecture'
+  echo "GRUB_PLATFORMS=\"$_BOOT_PLATFORM\""
+} >>/mnt/etc/portage/make.conf
 
 cp -L /etc/resolv.conf /mnt/etc/
 mount --types proc /proc /mnt/proc
@@ -139,7 +141,7 @@ chroot /mnt /bin/bash -c 'env-update'
 
 echo 'sys-kernel/installkernel dracut grub' >>/mnt/etc/portage/package.use
 echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE' >>/mnt/etc/portage/package.license
-chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware'
+chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/installkernel sys-kernel/linux-firmware'
 
 is_bios && _BOOT_FSTAB="$_BOOT_DEV /boot ext4 defaults,noatime 0 2"
 is_bios && _GRUB_CONFIG='/boot/grub/grub.cfg'
@@ -153,6 +155,7 @@ is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
 
 chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL"
 chroot /mnt /bin/bash -c "grub-mkconfig -o $_GRUB_CONFIG"
+chroot /mnt /bin/bash -c 'emerge --ask=n --config sys-kernel/gentoo-kernel-bin'
 
 {
   echo '# <fs> <mountpoint> <type> <opts> <dump> <pass>'
@@ -162,4 +165,4 @@ chroot /mnt /bin/bash -c "grub-mkconfig -o $_GRUB_CONFIG"
 } >/mnt/etc/fstab
 echo "$_HOSTNAME" >/mnt/etc/hostname
 echo "root:$_PASSWORD" | chroot /mnt /usr/sbin/chpasswd
-rm -fr /mnt/stage3-current.tar.xz
+rm -f /mnt/stage3-current.tar.xz

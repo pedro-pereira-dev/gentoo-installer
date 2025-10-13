@@ -10,6 +10,8 @@ while [ $# -gt 0 ]; do
   shift && shift
 done
 
+[ -z "$_HOSTNAME" ] && [ -z "$_PASSWORD" ] && [ ! -e "$_BOOT_DEV" ] && [ ! -e "$_SWAP_DEV" ] && [ ! -e "$_ROOT_DEV" ] && _INTERACTIVE='true'
+
 [ -z "$_HOSTNAME" ] && while true; do
   printf 'Hostname: ' && read -r _HOSTNAME
   [ -n "$_HOSTNAME" ] && case "$_HOSTNAME" in
@@ -54,8 +56,11 @@ echo " - System keymap: $_KEYMAP"
 echo " - System timezone: $_TIMEZONE"
 echo ''
 echo "All data from devices $_BOOT_DEV, $_SWAP_DEV and $_ROOT_DEV will be erased!"
-printf 'Do you want to continue? [Y/n]: ' && read -r _CONFIRMATION
-[ ! "$_CONFIRMATION" = 'n' ] && [ ! "$_CONFIRMATION" = 'N' ] || exit 0
+
+if [ -n "$_INTERACTIVE" ]; then
+  printf 'Do you want to continue? [Y/n]: ' && read -r _CONFIRMATION
+  [ ! "$_CONFIRMATION" = 'n' ] && [ ! "$_CONFIRMATION" = 'N' ] || exit 0
+fi
 
 is_aarch64() { test "$(uname -m)" = 'aarch64'; }
 is_amd64() { test "$(uname -m)" = 'x86_64'; }
@@ -68,7 +73,7 @@ is_bios && _BOOT_MOUNT='/mnt/boot'
 is_bios && _BOOT_PLATFORM='pc'
 
 is_uefi && _BOOT_FS='mkfs.fat -F 32'
-is_uefi && _BOOT_MOUNT='/mnt/efi'
+is_uefi && _BOOT_MOUNT='/mnt/boot/efi'
 is_uefi && _BOOT_PLATFORM='efi-64'
 
 yes | $_BOOT_FS "$_BOOT_DEV" # boot partition with FAT32 for UEFI and EXT4 for BIOS
@@ -112,16 +117,14 @@ echo '*/* custom.make.conf' >>/mnt/etc/portage/package.env
   echo 'FETCHCOMMAND="$FETCHCOMMAND -q"'
   echo 'RESUMECOMMAND="$RESUMECOMMAND -q"'
   echo ''
+  echo '# bootloader platform architecture'
+  echo "GRUB_PLATFORMS=\"$_BOOT_PLATFORM\""
+  echo ''
   echo '# portage default options'
   echo "EMERGE_DEFAULT_OPTS=\"--ask --jobs $_PORTAGE_JOBS --load-average $_LOAD_JOBS --quiet --verbose\""
   echo "FEATURES=\"$FEATURES binpkg-request-signature getbinpkg\""
   echo "MAKEOPTS=\"--jobs $_MAKE_JOBS --load-average $_LOAD_JOBS\""
 } >>/mnt/etc/portage/env/custom.make.conf
-
-{
-  echo '# bootloader platform architecture'
-  echo "GRUB_PLATFORMS=\"$_BOOT_PLATFORM\""
-} >>/mnt/etc/portage/make.conf
 
 cp -L /etc/resolv.conf /mnt/etc/
 mount --types proc /proc /mnt/proc
@@ -141,21 +144,20 @@ chroot /mnt /bin/bash -c 'env-update'
 
 echo 'sys-kernel/installkernel dracut grub' >>/mnt/etc/portage/package.use
 echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE' >>/mnt/etc/portage/package.license
-chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/installkernel sys-kernel/linux-firmware'
+chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware'
 
-is_bios && _BOOT_FSTAB="$_BOOT_DEV /boot ext4 defaults,noatime 0 2"
+is_bios && _BOOT_FSTAB="$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"
 is_bios && _GRUB_CONFIG='/boot/grub/grub.cfg'
 is_bios && _GRUB_INSTALL="$_BOOT_DEV"
 is_bios && _GRUB_INSTALL="${_GRUB_INSTALL%?}" # removes last character
 
-is_uefi && _BOOT_FSTAB="$_BOOT_DEV /efi vfat defaults,noatime,nodev,noexec,nosuid,dmask=0077,fmask=0177 0 2"
-is_uefi && is_aarch64 && _GRUB_CONFIG='/efi/EFI/gentoo/grubaa64.cfg'
-is_uefi && is_amd64 && _GRUB_CONFIG='/efi/EFI/gentoo/grub.cfg'
-is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
+is_uefi && _BOOT_FSTAB="$_BOOT_DEV /boot/efi vfat defaults,noatime,nodev,nosuid,umask=0077 0 2"
+is_uefi && is_aarch64 && _GRUB_CONFIG='/boot/efi/EFI/gentoo/grubaa64.cfg'
+is_uefi && is_amd64 && _GRUB_CONFIG='/boot/efi/EFI/gentoo/grub.cfg'
+is_uefi && _GRUB_INSTALL='--efi-directory=/boot/efi'
 
 chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL"
 chroot /mnt /bin/bash -c "grub-mkconfig -o $_GRUB_CONFIG"
-chroot /mnt /bin/bash -c 'emerge --ask=n --config sys-kernel/gentoo-kernel-bin'
 
 {
   echo '# <fs> <mountpoint> <type> <opts> <dump> <pass>'

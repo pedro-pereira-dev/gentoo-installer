@@ -103,7 +103,7 @@ _LOAD_JOBS=$((_MAKE_JOBS + 1))                                  # max number of 
 _PORTAGE_JOBS=$(((_MAKE_JOBS + 1) / 2))                         # ceiling of half max number of jobs
 
 mkdir -p /mnt/etc/portage/env
-echo '*/* custom.make.conf' >>/mnt/etc/portage/package.env
+echo '*/* gentoo-installer.make.conf' >>/mnt/etc/portage/package.env
 {
   echo '# values modified by the installation script'
   echo 'COMMON_FLAGS="-march=native -O2 -pipe"'
@@ -124,7 +124,7 @@ echo '*/* custom.make.conf' >>/mnt/etc/portage/package.env
   echo "EMERGE_DEFAULT_OPTS=\"--ask --jobs $_PORTAGE_JOBS --load-average $_LOAD_JOBS --quiet --verbose\""
   echo "FEATURES=\"$FEATURES binpkg-request-signature getbinpkg\""
   echo "MAKEOPTS=\"--jobs $_MAKE_JOBS --load-average $_LOAD_JOBS\""
-} >>/mnt/etc/portage/env/custom.make.conf
+} >>/mnt/etc/portage/env/gentoo-installer.make.conf
 
 cp -L /etc/resolv.conf /mnt/etc/
 mount --types proc /proc /mnt/proc
@@ -142,8 +142,9 @@ chroot /mnt /bin/bash -c 'echo "en_US.UTF-8 UTF-8" >/etc/locale.gen'
 chroot /mnt /bin/bash -c 'locale-gen && eselect locale set 4'
 chroot /mnt /bin/bash -c 'env-update'
 
-echo 'sys-kernel/installkernel dracut grub' >>/mnt/etc/portage/package.use
-echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE' >>/mnt/etc/portage/package.license
+mkdir -p /mnt/etc/portage/package.license /mnt/etc/portage/package.use
+echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE' >>/mnt/etc/portage/package.license/00-gentoo-installer.package-license.conf
+echo 'sys-kernel/installkernel dracut grub' >>/mnt/etc/portage/package.use/00-gentoo-installer.package-use.conf
 chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware'
 
 is_bios && _BOOT_FSTAB="$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"

@@ -1,6 +1,12 @@
 #!/bin/sh
 # shellcheck disable=SC2016
 
+is_aarch64() { test "$(uname -m)" = 'aarch64'; }
+is_amd64() { test "$(uname -m)" = 'x86_64'; }
+
+is_bios() { ! is_uefi; }
+is_uefi() { test -d '/sys/firmware/efi'; }
+
 while [ $# -gt 0 ]; do
   case "$1" in
   --hostname) _HOSTNAME=$2 ;; --password) _PASSWORD=$2 ;;
@@ -47,6 +53,9 @@ _KEYMAP=${_KEYMAP:-'pt-latin9'}
 _TIMEZONE=${_TIMEZONE:-'Europe/Lisbon'}
 
 echo 'Installation details:'
+is_bios && echo ' - System partition table: msdos'
+is_uefi && echo ' - System partition table: gpt'
+echo " - System architecture: $(uname -m)"
 echo " - System hostname: $_HOSTNAME"
 echo " - System password: $_PASSWORD"
 echo " - System boot device: $_BOOT_DEV"
@@ -60,13 +69,10 @@ echo "All data from devices $_BOOT_DEV, $_SWAP_DEV and $_ROOT_DEV will be erased
 if [ -n "$_INTERACTIVE" ]; then
   printf 'Do you want to continue? [Y/n]: ' && read -r _CONFIRMATION
   [ ! "$_CONFIRMATION" = 'n' ] && [ ! "$_CONFIRMATION" = 'N' ] || exit 0
+else
+  echo 'Starting installation in a few seconds...'
+  sleep 10
 fi
-
-is_aarch64() { test "$(uname -m)" = 'aarch64'; }
-is_amd64() { test "$(uname -m)" = 'x86_64'; }
-
-is_bios() { ! is_uefi; }
-is_uefi() { test -d '/sys/firmware/efi'; }
 
 is_bios && _BOOT_FS='mkfs.ext4'
 is_bios && _BOOT_MOUNT='/mnt/boot'
@@ -154,14 +160,16 @@ mkdir -p /mnt/etc/portage/package.license /mnt/etc/portage/package.use
 chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware'
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
+_GRUB_CONFIG='/boot/grub/grub.cfg'
+
 is_bios && _BOOT_FSTAB="$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"
-is_bios && _GRUB_CONFIG='/boot/grub/grub.cfg'
+# is_bios && _GRUB_CONFIG='/boot/grub/grub.cfg'
 is_bios && _GRUB_INSTALL="$_BOOT_DEV"
 is_bios && _GRUB_INSTALL="${_GRUB_INSTALL%?}" # removes last character
 
 is_uefi && _BOOT_FSTAB="$_BOOT_DEV /efi vfat defaults,noatime,nodev,nosuid,umask=0077 0 2"
-is_uefi && is_aarch64 && _GRUB_CONFIG='/efi/EFI/gentoo/grubaa64.cfg'
-is_uefi && is_amd64 && _GRUB_CONFIG='/efi/EFI/gentoo/grub.cfg'
+# is_uefi && is_aarch64 && _GRUB_CONFIG='/efi/EFI/gentoo/grubaa64.cfg'
+# is_uefi && is_amd64 && _GRUB_CONFIG='/efi/EFI/gentoo/grub.cfg'
 is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
 
 chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL"

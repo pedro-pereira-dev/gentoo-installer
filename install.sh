@@ -182,5 +182,6 @@ chroot /mnt /bin/bash -c "grub-mkconfig -o $_GRUB_CONFIG"
   echo "$_ROOT_DEV / ext4 defaults,noatime 0 1"
 } >/mnt/etc/fstab
 echo "$_HOSTNAME" >/mnt/etc/hostname
+echo "hostname=\"$_HOSTNAME\"" >/mnt/etc/conf.d/hostname
 echo "root:$_PASSWORD" | chroot /mnt /usr/sbin/chpasswd
 rm -f /mnt/stage3-current.tar.xz

@@ -160,20 +160,15 @@ mkdir -p /mnt/etc/portage/package.license /mnt/etc/portage/package.use
 chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware'
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
-_GRUB_CONFIG='/boot/grub/grub.cfg'
-
 is_bios && _BOOT_FSTAB="$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"
-# is_bios && _GRUB_CONFIG='/boot/grub/grub.cfg'
 is_bios && _GRUB_INSTALL="$_BOOT_DEV"
 is_bios && _GRUB_INSTALL="${_GRUB_INSTALL%?}" # removes last character
 
 is_uefi && _BOOT_FSTAB="$_BOOT_DEV /efi vfat defaults,noatime,nodev,nosuid,umask=0077 0 2"
-# is_uefi && is_aarch64 && _GRUB_CONFIG='/efi/EFI/gentoo/grubaa64.cfg'
-# is_uefi && is_amd64 && _GRUB_CONFIG='/efi/EFI/gentoo/grub.cfg'
 is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
 
 chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL"
-chroot /mnt /bin/bash -c "grub-mkconfig -o $_GRUB_CONFIG"
+chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 
 {
   echo '# <fs> <mountpoint> <type> <opts> <dump> <pass>'
@@ -181,7 +176,9 @@ chroot /mnt /bin/bash -c "grub-mkconfig -o $_GRUB_CONFIG"
   echo "$_SWAP_DEV none swap sw 0 0"
   echo "$_ROOT_DEV / ext4 defaults,noatime 0 1"
 } >/mnt/etc/fstab
+
 echo "$_HOSTNAME" >/mnt/etc/hostname
-echo "hostname=\"$_HOSTNAME\"" >/mnt/etc/conf.d/hostname
+sed -i "s/hostname=\"[^\"]*\"/hostname=\"$_HOSTNAME\"/g" /mnt/etc/conf.d/hostname
 echo "root:$_PASSWORD" | chroot /mnt /usr/sbin/chpasswd
+
 rm -f /mnt/stage3-current.tar.xz

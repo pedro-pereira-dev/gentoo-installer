@@ -16,8 +16,6 @@ while [ $# -gt 0 ]; do
   shift && shift
 done
 
-[ -z "$_HOSTNAME" ] && [ -z "$_PASSWORD" ] && [ ! -e "$_BOOT_DEV" ] && [ ! -e "$_SWAP_DEV" ] && [ ! -e "$_ROOT_DEV" ] && _INTERACTIVE='true'
-
 [ -z "$_HOSTNAME" ] && while true; do
   printf 'Hostname: ' && read -r _HOSTNAME
   [ -n "$_HOSTNAME" ] && case "$_HOSTNAME" in
@@ -65,14 +63,7 @@ echo " - System keymap: $_KEYMAP"
 echo " - System timezone: $_TIMEZONE"
 echo ''
 echo "All data from devices $_BOOT_DEV, $_SWAP_DEV and $_ROOT_DEV will be erased!"
-
-if [ -n "$_INTERACTIVE" ]; then
-  printf 'Do you want to continue? [Y/n]: ' && read -r _CONFIRMATION
-  [ ! "$_CONFIRMATION" = 'n' ] && [ ! "$_CONFIRMATION" = 'N' ] || exit 0
-else
-  echo 'Starting installation in a few seconds...'
-  sleep 10
-fi
+echo 'Starting installation in a few seconds...' && sleep 30
 
 is_bios && _BOOT_FS='mkfs.ext4'
 is_bios && _BOOT_MOUNT='/mnt/boot'
@@ -109,7 +100,7 @@ _LOAD_JOBS=$((_MAKE_JOBS + 1))                                  # max number of 
 _PORTAGE_JOBS=$(((_MAKE_JOBS + 1) / 2))                         # ceiling of half max number of jobs
 
 mkdir -p /mnt/etc/portage/env
-echo '*/* gentoo-installer-make.conf' >>/mnt/etc/portage/package.env
+echo '*/* 0-gentoo-installer-make.conf' >>/mnt/etc/portage/package.env
 {
   echo '# values modified by the installation script'
   echo 'COMMON_FLAGS="-march=native -O2 -pipe"'
@@ -130,7 +121,7 @@ echo '*/* gentoo-installer-make.conf' >>/mnt/etc/portage/package.env
   echo "EMERGE_DEFAULT_OPTS=\"--ask --jobs $_PORTAGE_JOBS --load-average $_LOAD_JOBS --quiet --verbose\""
   echo "FEATURES=\"$FEATURES binpkg-request-signature getbinpkg\""
   echo "MAKEOPTS=\"--jobs $_MAKE_JOBS --load-average $_LOAD_JOBS\""
-} >>/mnt/etc/portage/env/gentoo-installer-make.conf
+} >>/mnt/etc/portage/env/0-gentoo-installer-make.conf
 
 cp -L /etc/resolv.conf /mnt/etc/
 mount --types proc /proc /mnt/proc
@@ -152,11 +143,11 @@ mkdir -p /mnt/etc/portage/package.license /mnt/etc/portage/package.use
 {
   echo '#!/bin/sh'
   echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE'
-} >>/mnt/etc/portage/package.license/gentoo-installer-license.conf
+} >>/mnt/etc/portage/package.license/0-gentoo-installer-license.conf
 {
   echo '#!/bin/sh'
   echo 'sys-kernel/installkernel dracut grub'
-} >>/mnt/etc/portage/package.use/gentoo-installer-use.conf
+} >>/mnt/etc/portage/package.use/0-gentoo-installer-use.conf
 chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware'
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 

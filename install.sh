@@ -63,32 +63,26 @@ echo " - System keymap: $_KEYMAP"
 echo " - System timezone: $_TIMEZONE"
 echo ''
 echo "All data from devices $_BOOT_DEV, $_SWAP_DEV and $_ROOT_DEV will be erased!"
-echo 'Starting installation in a few seconds...' && sleep 30
+printf 'Press any key to continue...' && read -r _
 
-is_bios && _BOOT_FS='mkfs.ext4'
-is_bios && _BOOT_MOUNT='/mnt/boot'
-is_bios && _BOOT_PLATFORM='pc'
-
-is_uefi && _BOOT_FS='mkfs.fat -F 32'
-is_uefi && _BOOT_MOUNT='/mnt/efi'
-is_uefi && _BOOT_PLATFORM='efi-64'
-
-yes | $_BOOT_FS "$_BOOT_DEV" # boot partition with FAT32 for UEFI and EXT4 for BIOS
-yes | mkswap "$_SWAP_DEV"    # swap partition
-yes | mkfs.ext4 "$_ROOT_DEV" # root partition with EXT4
+is_bios && yes | mkfs.ext4 "$_BOOT_DEV"      # boot partition with EXT4 for BIOS
+is_uefi && yes | mkfs.fat -F 32 "$_BOOT_DEV" # boot partition with FAT32 for UEFI
+yes | mkswap "$_SWAP_DEV"                    # swap partition
+yes | mkfs.ext4 "$_ROOT_DEV"                 # root partition with EXT4
 
 mount -m "$_ROOT_DEV" /mnt
 swapon "$_SWAP_DEV"
-mount -m "$_BOOT_DEV" "$_BOOT_MOUNT"
+is_bios && mount -m "$_BOOT_DEV" /mnt/boot
+is_uefi && mount -m "$_BOOT_DEV" /mnt/efi
 
-is_aarch64 && _ARCH='arm64'
-is_amd64 && _ARCH='amd64'
-
-_METADATA="https://gentoo.osuosl.org/releases/$_ARCH/autobuilds/latest-stage3-$_ARCH-openrc.txt"
+is_aarch64 && _METADATA="https://gentoo.osuosl.org/releases/arm64/autobuilds/latest-stage3-arm64-openrc.txt"
+is_amd64 && _METADATA="https://gentoo.osuosl.org/releases/amd64/autobuilds/latest-stage3-amd64-openrc.txt"
 _BUILD=$(curl -Lfs "$_METADATA" | sed -n '6p' | cut -d' ' -f1)
-_STAGE_FILE="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/$_BUILD"
+is_aarch64 && _STAGE_FILE="https://distfiles.gentoo.org/releases/arm64/autobuilds/$_BUILD"
+is_amd64 && _STAGE_FILE="https://distfiles.gentoo.org/releases/amd64/autobuilds/$_BUILD"
 
-curl -Lf "$_STAGE_FILE" >/mnt/stage3-current.tar.xz
+echo 'Dowloading latest gentoo stage release...'
+curl -Lf --progress-bar -o /mnt/stage3-current.tar.xz "$_STAGE_FILE"
 tar xpf /mnt/stage3-current.tar.xz -C /mnt --numeric-owner --xattrs-include='*.*'
 rm -fr /mnt/etc/portage/package.*
 
@@ -115,7 +109,8 @@ echo '*/* 0-gentoo-installer-make.conf' >>/mnt/etc/portage/package.env
   echo 'RESUMECOMMAND="$RESUMECOMMAND -q"'
   echo ''
   echo '# bootloader platform architecture'
-  echo "GRUB_PLATFORMS=\"$_BOOT_PLATFORM\""
+  is_bios && echo "GRUB_PLATFORMS=\"pc\""
+  is_uefi && echo "GRUB_PLATFORMS=\"efi-64\""
   echo ''
   echo '# portage default options'
   echo "EMERGE_DEFAULT_OPTS=\"--ask --jobs $_PORTAGE_JOBS --load-average $_LOAD_JOBS --quiet --verbose\""
@@ -134,7 +129,7 @@ mount --make-slave /mnt/run
 
 chroot /mnt /bin/bash -c 'emerge-webrsync'
 chroot /mnt /bin/bash -c "ln -fs '/usr/share/zoneinfo/$_TIMEZONE' /etc/localtime"
-chroot /mnt /bin/bash -c "sed -i 's/keymap=\"us\"/keymap=\"$_KEYMAP\"/g' /etc/conf.d/keymaps"
+chroot /mnt /bin/bash -c "sed -i 's/keymap=\"[^\"]*\"*/keymap=\"$_KEYMAP\"/g' /etc/conf.d/keymaps"
 chroot /mnt /bin/bash -c 'echo "en_US.UTF-8 UTF-8" >/etc/locale.gen'
 chroot /mnt /bin/bash -c 'locale-gen && eselect locale set 4'
 chroot /mnt /bin/bash -c 'env-update'

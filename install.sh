@@ -72,8 +72,7 @@ yes | mkfs.ext4 "$_ROOT_DEV"                 # root partition with EXT4
 
 mount -m "$_ROOT_DEV" /mnt
 swapon "$_SWAP_DEV"
-is_bios && mount -m "$_BOOT_DEV" /mnt/boot
-is_uefi && mount -m "$_BOOT_DEV" /mnt/efi
+mount -m "$_BOOT_DEV" /mnt/boot
 
 is_aarch64 && _METADATA="https://gentoo.osuosl.org/releases/arm64/autobuilds/latest-stage3-arm64-openrc.txt"
 is_amd64 && _METADATA="https://gentoo.osuosl.org/releases/amd64/autobuilds/latest-stage3-amd64-openrc.txt"
@@ -147,13 +146,12 @@ chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
 is_bios && _BOOT_FSTAB="$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"
-is_bios && _GRUB_INSTALL="$_BOOT_DEV"
-is_bios && _GRUB_INSTALL="${_GRUB_INSTALL%?}" # removes last character
+is_bios && _GRUB_INSTALL="$(lsblk -dno pkname "$_BOOT_DEV")"
 
-is_uefi && _BOOT_FSTAB="$_BOOT_DEV /efi vfat defaults,noatime,nodev,nosuid,umask=0077 0 2"
-is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
+is_uefi && _BOOT_FSTAB="$_BOOT_DEV /boot vfat defaults,noatime,nodev,nosuid,umask=0077 0 2"
+is_uefi && _GRUB_INSTALL='--efi-directory=/boot'
 
-chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL"
+chroot /mnt /bin/bash -c "grub-install --removable $_GRUB_INSTALL"
 chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 
 {

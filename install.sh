@@ -7,6 +7,8 @@ is_amd64() { test "$(uname -m)" = 'x86_64'; }
 is_bios() { ! is_uefi; }
 is_uefi() { test -d '/sys/firmware/efi'; }
 
+get_uuid() { lsblk -no UUID "$1"; }
+
 while [ $# -gt 0 ]; do
   case "$1" in
   --hostname) _HOSTNAME=$2 ;; --password) _PASSWORD=$2 ;;
@@ -145,20 +147,24 @@ mkdir -p /mnt/etc/portage/package.license /mnt/etc/portage/package.use
 chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware'
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
-is_bios && _BOOT_FSTAB="$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"
 is_bios && _GRUB_INSTALL="$(lsblk -dno pkname "$_BOOT_DEV")"
-
-is_uefi && _BOOT_FSTAB="$_BOOT_DEV /boot vfat defaults,noatime,nodev,nosuid,umask=0077 0 2"
 is_uefi && _GRUB_INSTALL='--efi-directory=/boot'
 
-chroot /mnt /bin/bash -c "grub-install --removable $_GRUB_INSTALL"
+chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL"
 chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg'
+
+_BOOT_UUID=$(get_uuid "$_BOOT_DEV")
+_SWAP_UUID=$(get_uuid "$_SWAP_DEV")
+_ROOT_UUID=$(get_uuid "$_ROOT_DEV")
+
+is_uefi && _BOOT_FSTAB="$_BOOT_UUID /boot vfat defaults,noatime,nodev,nosuid,umask=0077 0 2"
+is_bios && _BOOT_FSTAB="$_BOOT_UUID /boot ext4 defaults,noatime,nodev,nosuid 0 2"
 
 {
   echo '# <fs> <mountpoint> <type> <opts> <dump> <pass>'
   echo "$_BOOT_FSTAB"
-  echo "$_SWAP_DEV none swap sw 0 0"
-  echo "$_ROOT_DEV / ext4 defaults,noatime 0 1"
+  echo "$_SWAP_UUID none swap sw 0 0"
+  echo "$_ROOT_UUID / ext4 defaults,noatime 0 1"
 } >/mnt/etc/fstab
 
 echo "$_HOSTNAME" >/mnt/etc/hostname

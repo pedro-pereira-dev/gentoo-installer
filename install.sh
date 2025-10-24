@@ -74,7 +74,8 @@ yes | mkfs.ext4 "$_ROOT_DEV"                 # root partition with EXT4
 
 mount -m "$_ROOT_DEV" /mnt
 swapon "$_SWAP_DEV"
-mount -m "$_BOOT_DEV" /mnt/boot
+is_bios && mount -m "$_BOOT_DEV" /mnt/boot
+is_uefi && mount -m "$_BOOT_DEV" /mnt/efi
 
 is_aarch64 && _METADATA="https://gentoo.osuosl.org/releases/arm64/autobuilds/latest-stage3-arm64-openrc.txt"
 is_amd64 && _METADATA="https://gentoo.osuosl.org/releases/amd64/autobuilds/latest-stage3-amd64-openrc.txt"
@@ -94,8 +95,8 @@ _MAKE_JOBS=$((_MAKE_JOBS > 1 ? _MAKE_JOBS : 1))                 # max(make_opt_j
 _LOAD_JOBS=$((_MAKE_JOBS + 1))                                  # max number of jobs plus one for io
 _PORTAGE_JOBS=$(((_MAKE_JOBS + 1) / 2))                         # ceiling of half max number of jobs
 
-mkdir -p /mnt/etc/portage/env
-echo '*/* 0-gentoo-installer-make.conf' >>/mnt/etc/portage/package.env
+mkdir -p /mnt/etc/portage/env /mnt/etc/portage/package.env
+echo '*/* 0-gentoo-installer-make.conf' >>/mnt/etc/portage/package.env/0-gentoo-installer-env.conf
 {
   echo '# values modified by the installation script'
   echo 'COMMON_FLAGS="-march=native -O2 -pipe"'
@@ -148,23 +149,23 @@ chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
 is_bios && _GRUB_INSTALL="$(lsblk -dno pkname "$_BOOT_DEV")"
-is_uefi && _GRUB_INSTALL='--efi-directory=/boot'
+is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
 
-chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL"
+chroot /mnt /bin/bash -c "grub-install --removable $_GRUB_INSTALL"
 chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 
 _BOOT_UUID=$(get_uuid "$_BOOT_DEV")
 _SWAP_UUID=$(get_uuid "$_SWAP_DEV")
 _ROOT_UUID=$(get_uuid "$_ROOT_DEV")
 
-is_uefi && _BOOT_FSTAB="$_BOOT_UUID /boot vfat defaults,noatime,nodev,nosuid,umask=0077 0 2"
-is_bios && _BOOT_FSTAB="$_BOOT_UUID /boot ext4 defaults,noatime,nodev,nosuid 0 2"
+is_uefi && _BOOT_FSTAB="UUID=$_BOOT_UUID /boot vfat defaults,noatime,nodev,nosuid,umask=0077 0 2"
+is_bios && _BOOT_FSTAB="UUID=$_BOOT_UUID /efi ext4 defaults,noatime,nodev,nosuid 0 2"
 
 {
   echo '# <fs> <mountpoint> <type> <opts> <dump> <pass>'
   echo "$_BOOT_FSTAB"
-  echo "$_SWAP_UUID none swap sw 0 0"
-  echo "$_ROOT_UUID / ext4 defaults,noatime 0 1"
+  echo "UUID=$_SWAP_UUID none swap sw 0 0"
+  echo "UUID=$_ROOT_UUID / ext4 defaults,noatime 0 1"
 } >/mnt/etc/fstab
 
 echo "$_HOSTNAME" >/mnt/etc/hostname

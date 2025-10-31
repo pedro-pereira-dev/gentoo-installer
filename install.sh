@@ -131,7 +131,13 @@ chroot /mnt /bin/bash -c 'locale-gen && eselect locale set 4'
 chroot /mnt /bin/bash -c "sed -i 's/keymap=\"[^\"]*\"*/keymap=\"$_KEYMAP\"/g' /etc/conf.d/keymaps"
 chroot /mnt /bin/bash -c 'env-update'
 
-mkdir -p /mnt/etc/portage/package.license /mnt/etc/portage/package.use
+mkdir -p /mnt/etc/portage/package.declare /mnt/etc/portage/package.license /mnt/etc/portage/package.use
+{
+  echo '#!/bin/sh'
+  echo 'sys-kernel/gentoo-kernel-bin'
+  echo 'sys-kernel/installkernel'
+  echo 'sys-kernel/linux-firmware'
+} >>/mnt/etc/portage/package.declare/0-gentoo-installer-declare.conf
 {
   echo '#!/bin/sh'
   echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE'
@@ -140,7 +146,11 @@ mkdir -p /mnt/etc/portage/package.license /mnt/etc/portage/package.use
   echo '#!/bin/sh'
   echo 'sys-kernel/installkernel dracut grub'
 } >>/mnt/etc/portage/package.use/0-gentoo-installer-use.conf
-chroot /mnt /bin/bash -c 'emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware'
+chroot /mnt /bin/bash -c 'emerge --ask=n \
+  sys-kernel/gentoo-kernel-bin \
+  sys-kernel/installkernel \
+  sys-kernel/linux-firmware \
+'
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
 is_bios && _GRUB_INSTALL="/dev/$(lsblk -dno pkname "$_BOOT_DEV")"

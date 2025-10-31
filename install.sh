@@ -154,9 +154,9 @@ chroot /mnt /bin/bash -c 'emerge --ask=n \
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
 is_bios && _GRUB_INSTALL="/dev/$(lsblk -dno pkname "$_BOOT_DEV")"
-is_uefi && _GRUB_INSTALL='--efi-directory=/efi --removable'
+is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
 
-chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL"
+chroot /mnt /bin/bash -c "grub-install --removable $_GRUB_INSTALL"
 chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 
 {

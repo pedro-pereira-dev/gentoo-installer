@@ -1,6 +1,6 @@
 # Gentoo Installer
 
-This script is used to obtain a [Gentoo](https://www.gentoo.org/) minimal installation on a systemm.
+This script is used to obtain a [Gentoo](https://www.gentoo.org/) minimal installation on a systemm by following the steps documented on [Gentoo's handbook](https://wiki.gentoo.org/wiki/Handbook:Main_Page).
 Gentoo is a linux meta-distribution focused on user freedom of choice. As such it does not provide an easy installation method like other popular distributions, this project aims to fill in that gap for my own needs.
 
 *I use this project to setup and maintain all my Gentoo systems and is not intended for community use.*

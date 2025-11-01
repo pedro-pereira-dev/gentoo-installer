@@ -47,15 +47,15 @@ _KEYMAP=${_KEYMAP:-'pt-latin9'}
 _TIMEZONE=${_TIMEZONE:-'Europe/Lisbon'}
 
 echo 'Installation details:'
-is_bios && echo ' - System partition table: msdos'
-is_uefi && echo ' - System partition table: gpt'
-echo " - System architecture: $(uname -m)"
-echo " - System hostname: $_HOSTNAME"
-echo " - System password: $_PASSWORD"
-echo " - System boot device: $_BOOT_DEV"
-echo " - System root device: $_ROOT_DEV"
-echo " - System keymap: $_KEYMAP"
-echo " - System timezone: $_TIMEZONE"
+is_bios && echo ' - Partition table: msdos'
+is_uefi && echo ' - Partition table: gpt'
+echo " - CPU architecture: $(uname -m)"
+echo " - Hostname: $_HOSTNAME"
+echo " - Password: $_PASSWORD"
+echo " - Boot device: $_BOOT_DEV"
+echo " - Root device: $_ROOT_DEV"
+echo " - Keymap: $_KEYMAP"
+echo " - Timezone: $_TIMEZONE"
 echo ''
 echo "All data from devices $_BOOT_DEV and $_ROOT_DEV will be erased!"
 printf 'Press any key to continue...' && read -r _
@@ -64,21 +64,19 @@ is_bios && yes | mkfs.ext4 "$_BOOT_DEV"      # mbr / bios partition with EXT4
 is_uefi && yes | mkfs.fat -F 32 "$_BOOT_DEV" # efi partition with FAT32
 yes | mkfs.ext4 "$_ROOT_DEV"                 # root partition with EXT4
 
-is_bios && _BOOT_MOUNT='/boot'
-is_uefi && _BOOT_MOUNT='/efi'
-
 mount -m "$_ROOT_DEV" /mnt
-mount -m "$_BOOT_DEV" "/mnt$_BOOT_MOUNT"
+is_bios && mount -m "$_BOOT_DEV" /mnt/boot
+is_uefi && mount -m "$_BOOT_DEV" /mnt/efi
 
 is_aarch64 && _ARCH='arm64'
 is_amd64 && _ARCH='amd64'
 _METADATA="https://gentoo.osuosl.org/releases/$_ARCH/autobuilds/latest-stage3-$_ARCH-openrc.txt"
-_BUILD=$(curl -Lfs "$_METADATA" | sed -n '6p' | cut -d' ' -f1)
+_BUILD=$(curl -Lfs "$_METADATA" | sed -n 6p | cut -d' ' -f1)
 _STAGE_FILE="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/$_BUILD"
 
 echo 'Dowloading latest gentoo stage release...'
-curl -Lf --progress-bar -o /mnt/stage3-current.tar.xz "$_STAGE_FILE"
-tar xpf /mnt/stage3-current.tar.xz -C /mnt --numeric-owner --xattrs-include='*.*'
+curl -Lf# -o /mnt/stage3-current.tar.xz "$_STAGE_FILE"
+tar xpf /mnt/stage3-current.tar.xz -C /mnt --numeric-owner --xattrs-include=*.*
 rm -fr /mnt/etc/portage/package.*
 
 cp -L /etc/resolv.conf /mnt/etc/
@@ -97,14 +95,12 @@ _MAKE_JOBS=$((_MAKE_JOBS > 1 ? _MAKE_JOBS : 1))                 # max(make_opt_j
 _LOAD_JOBS=$((_MAKE_JOBS + 1))                                  # max number of jobs plus one for io
 _PORTAGE_JOBS=$(((_MAKE_JOBS + 1) / 2))                         # ceiling of half max number of jobs
 
-is_bios && _PLATFORM='pc'
-is_uefi && _PLATFORM='efi-64'
 mkdir -p /mnt/etc/portage/env /mnt/etc/portage/package.env
 echo '*/* 0-gentoo-installer-make.conf' >>/mnt/etc/portage/package.env/0-gentoo-installer-env.conf
 {
-  echo '# values modified by the installation script'
-  echo 'COMMON_FLAGS="-march=native -O2 -pipe"'
+  echo '# compiler flags targetting system'
   echo 'RUSTFLAGS="$RUSTFLAGS -C target-cpu=native"'
+  echo 'COMMON_FLAGS="-march=native -O2 -pipe"'
   echo 'CFLAGS="$COMMON_FLAGS"'
   echo 'CXXFLAGS="$COMMON_FLAGS"'
   echo 'FCFLAGS="$COMMON_FLAGS"'
@@ -115,7 +111,8 @@ echo '*/* 0-gentoo-installer-make.conf' >>/mnt/etc/portage/package.env/0-gentoo-
   echo 'RESUMECOMMAND="$RESUMECOMMAND -q"'
   echo ''
   echo '# bootloader platform architecture'
-  echo "GRUB_PLATFORMS=\"$_PLATFORM\""
+  is_bios && echo 'GRUB_PLATFORMS="pc"'
+  is_uefi && echo 'GRUB_PLATFORMS="efi-64"'
   echo ''
   echo '# portage default options'
   echo "EMERGE_DEFAULT_OPTS=\"--ask --jobs $_PORTAGE_JOBS --load-average $_LOAD_JOBS --quiet --verbose\""
@@ -124,7 +121,7 @@ echo '*/* 0-gentoo-installer-make.conf' >>/mnt/etc/portage/package.env/0-gentoo-
 } >>/mnt/etc/portage/env/0-gentoo-installer-make.conf
 
 chroot /mnt /bin/bash -c 'emerge-webrsync'
-chroot /mnt /bin/bash -c "ln -fs '/usr/share/zoneinfo/$_TIMEZONE' /etc/localtime"
+chroot /mnt /bin/bash -c "ln -fs /usr/share/zoneinfo/$_TIMEZONE /etc/localtime"
 chroot /mnt /bin/bash -c 'hwclock -uw'
 chroot /mnt /bin/bash -c 'echo "en_US.UTF-8 UTF-8" >/etc/locale.gen'
 chroot /mnt /bin/bash -c 'locale-gen && eselect locale set 4'
@@ -146,11 +143,9 @@ mkdir -p /mnt/etc/portage/package.declare /mnt/etc/portage/package.license /mnt/
   echo '#!/bin/sh'
   echo 'sys-kernel/installkernel dracut grub'
 } >>/mnt/etc/portage/package.use/0-gentoo-installer-use.conf
-chroot /mnt /bin/bash -c 'emerge --ask=n \
-  sys-kernel/gentoo-kernel-bin \
-  sys-kernel/installkernel \
-  sys-kernel/linux-firmware \
-'
+
+_DEPENDENCIES=$(cat /mnt/etc/portage/package.declare/* | sort -u | sed -E -e '/^[[:space:]]*#/d' -e 's/([[:space:]])+#.*$//' | xargs)
+chroot /mnt /bin/bash -c "emerge --ask=n $_DEPENDENCIES"
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
 is_bios && _GRUB_INSTALL="/dev/$(lsblk -dno pkname "$_BOOT_DEV")"
@@ -161,8 +156,8 @@ chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 
 {
   echo '# <fs> <mountpoint> <type> <opts> <dump> <pass>'
-  is_bios && echo "$_BOOT_DEV $_BOOT_MOUNT ext4 defaults,noatime,nodev,nosuid 0 2"
-  is_uefi && echo "$_BOOT_DEV $_BOOT_MOUNT vfat defaults,noatime,nodev,noexec,nosuid,umask=0077 0 2"
+  is_bios && echo "$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"
+  is_uefi && echo "$_BOOT_DEV /efi vfat defaults,noatime,nodev,noexec,nosuid,umask=0077 0 2"
   echo "$_ROOT_DEV / ext4 defaults,noatime 0 1"
 } >/mnt/etc/fstab
 

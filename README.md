@@ -32,6 +32,7 @@ sh "$_TMP_FILE" \
   --password "$_PASSWORD" \
   --boot "$_BOOT_DEV" \
   --root "$_ROOT_DEV" \
+  --swap '4G' \
   --keymap 'pt-latin9' \
   --timezone 'Europe/Lisbon'
 ```

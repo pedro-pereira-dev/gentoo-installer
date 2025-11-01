@@ -11,7 +11,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
   --hostname) _HOSTNAME=$2 ;; --password) _PASSWORD=$2 ;;
   --boot) _BOOT_DEV=$2 ;; --root) _ROOT_DEV=$2 ;;
-  --keymap) _KEYMAP=$2 ;; --timezone) _TIMEZONE=$2 ;;
+  --swap) _SWAP_SIZE=$2 ;; --keymap) _KEYMAP=$2 ;; --timezone) _TIMEZONE=$2 ;;
   esac
   shift && shift
 done
@@ -39,6 +39,9 @@ done
   [ -e "$_ROOT_DEV" ] && break
 done
 
+[ -z "$_SWAP_SIZE" ] &&
+  printf 'Swap size: [4G] ' && read -r _SWAP_SIZE
+_SWAP_SIZE=${_SWAP_SIZE:-'4G'}
 [ -z "$_KEYMAP" ] &&
   printf 'Keymap: [pt-latin9] ' && read -r _KEYMAP
 _KEYMAP=${_KEYMAP:-'pt-latin9'}
@@ -54,6 +57,7 @@ echo " - Hostname: $_HOSTNAME"
 echo " - Password: $_PASSWORD"
 echo " - Boot device: $_BOOT_DEV"
 echo " - Root device: $_ROOT_DEV"
+echo " - Swap file size: $_SWAP_SIZE"
 echo " - Keymap: $_KEYMAP"
 echo " - Timezone: $_TIMEZONE"
 echo ''
@@ -159,7 +163,14 @@ chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg'
   is_bios && echo "$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"
   is_uefi && echo "$_BOOT_DEV /efi vfat defaults,noatime,nodev,noexec,nosuid,umask=0077 0 2"
   echo "$_ROOT_DEV / ext4 defaults,noatime 0 1"
+  [ -n "$_SWAP_SIZE" ] && echo "/swapfile none swap sw 0 0"
 } >/mnt/etc/fstab
+
+[ -n "$_SWAP_SIZE" ] && {
+  chroot /mnt /bin/bash -c "fallocate -l $_SWAP_SIZE /swapfile"
+  chroot /mnt /bin/bash -c "chmod 600 /swapfile"
+  chroot /mnt /bin/bash -c "mkswap /swapfile"
+}
 
 echo "$_HOSTNAME" >/mnt/etc/hostname
 sed -i "s/hostname=\"[^\"]*\"/hostname=\"$_HOSTNAME\"/g" /mnt/etc/conf.d/hostname

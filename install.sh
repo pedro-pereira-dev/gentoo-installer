@@ -1,51 +1,62 @@
 #!/bin/sh
 # shellcheck disable=SC2016
 
+get_option() {
+  _OPT='' && [ "$#" -ge 1 ] && _OPT="$1" && shift
+  while [ "$#" -gt 0 ]; do
+    _ARG="$1" && shift
+    if [ "$_OPT" = "$_ARG" ]; then
+      [ "$#" -gt 0 ] && expr "x$1" : 'x[^-]' >/dev/null && echo "$1"
+      return 0
+    fi
+  done
+  return 1
+}
+
+is_swap_enabled() { get_option '--swap' "$@" >/dev/null; }
+
 is_aarch64() { test "$(uname -m)" = 'aarch64'; }
 is_amd64() { test "$(uname -m)" = 'x86_64'; }
 
 is_bios() { ! is_uefi; }
 is_uefi() { test -d '/sys/firmware/efi'; }
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-  --hostname) _HOSTNAME=$2 ;; --password) _PASSWORD=$2 ;;
-  --boot) _BOOT_DEV=$2 ;; --root) _ROOT_DEV=$2 ;;
-  --swap) _SWAP_SIZE=$2 ;; --keymap) _KEYMAP=$2 ;; --timezone) _TIMEZONE=$2 ;;
-  esac
-  shift && shift
-done
+_HOSTNAME="$(get_option '--hostname' "$@")" && [ -n "$_HOSTNAME" ] ||
+  while true; do
+    printf 'Hostname: ' && read -r _HOSTNAME
+    [ -n "$_HOSTNAME" ] && case "$_HOSTNAME" in
+    *[!a-zA-Z0-9-]* | '') ;;
+    *) break ;;
+    esac
+  done
+_PASSWORD="$(get_option '--password' "$@")" && [ -n "$_PASSWORD" ] ||
+  while true; do
+    printf 'Password: ' && read -r _PASSWORD
+    [ -z "$_PASSWORD" ] && continue
+    printf 'Confirm password: ' && read -r _PASSWORD_CONFIRMATION
+    [ "$_PASSWORD" = "$_PASSWORD_CONFIRMATION" ] && break
+  done
 
-[ -z "$_HOSTNAME" ] && while true; do
-  printf 'Hostname: ' && read -r _HOSTNAME
-  [ -n "$_HOSTNAME" ] && case "$_HOSTNAME" in
-  *[!a-zA-Z0-9-]* | '') ;;
-  *) break ;;
-  esac
-done
-[ -z "$_PASSWORD" ] && while true; do
-  printf 'Password: ' && read -r _PASSWORD
-  [ -z "$_PASSWORD" ] && continue
-  printf 'Confirm password: ' && read -r _PASSWORD_CONFIRMATION
-  [ "$_PASSWORD" = "$_PASSWORD_CONFIRMATION" ] && break
-done
+_BOOT_DEV="$(get_option '--boot' "$@")" && [ -n "$_BOOT_DEV" ] ||
+  while true; do
+    printf 'Boot device:' && read -r _BOOT_DEV
+    [ -e "$_BOOT_DEV" ] && break
+  done
+_ROOT_DEV="$(get_option '--root' "$@")" && [ -n "$_ROOT_DEV" ] ||
+  while true; do
+    printf 'Root device:' && read -r _ROOT_DEV
+    [ -e "$_ROOT_DEV" ] && break
+  done
 
-[ -z "$_BOOT_DEV" ] && while true; do
-  printf 'Boot device:' && read -r _BOOT_DEV
-  [ -e "$_BOOT_DEV" ] && break
-done
-[ -z "$_ROOT_DEV" ] && while true; do
-  printf 'Root device:' && read -r _ROOT_DEV
-  [ -e "$_ROOT_DEV" ] && break
-done
-
-[ -z "$_SWAP_SIZE" ] &&
-  printf 'Swap size: [4G] ' && read -r _SWAP_SIZE
-_SWAP_SIZE=${_SWAP_SIZE:-'4G'}
-[ -z "$_KEYMAP" ] &&
+is_swap_enabled "$@" && {
+  _SWAP_SIZE="$(get_option '--swap' "$@")" && [ -z "$_SWAP_SIZE" ] &&
+    printf 'Swap size: [4G] ' && read -r _SWAP_SIZE
+  _SWAP_SIZE=${_SWAP_SIZE:-'4G'}
+}
+_KEYMAP="$(get_option '--keymap' "$@")" && [ -z "$_KEYMAP" ] &&
   printf 'Keymap: [pt-latin9] ' && read -r _KEYMAP
 _KEYMAP=${_KEYMAP:-'pt-latin9'}
-[ -z "$_TIMEZONE" ] &&
+_TIMEZONE="$(get_option '--timezone' "$@")" && [ -z "$_TIMEZONE" ] &&
   printf 'Timezone: [Europe/Lisbon] ' && read -r _TIMEZONE
 _TIMEZONE=${_TIMEZONE:-'Europe/Lisbon'}
 
@@ -57,7 +68,7 @@ echo " - Hostname: $_HOSTNAME"
 echo " - Password: $_PASSWORD"
 echo " - Boot device: $_BOOT_DEV"
 echo " - Root device: $_ROOT_DEV"
-echo " - Swap file size: $_SWAP_SIZE"
+is_swap_enabled "$@" && echo " - Swap file size: $_SWAP_SIZE"
 echo " - Keymap: $_KEYMAP"
 echo " - Timezone: $_TIMEZONE"
 echo ''
@@ -163,13 +174,13 @@ chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg'
   is_bios && echo "$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"
   is_uefi && echo "$_BOOT_DEV /efi vfat defaults,noatime,nodev,noexec,nosuid,umask=0077 0 2"
   echo "$_ROOT_DEV / ext4 defaults,noatime 0 1"
-  [ -n "$_SWAP_SIZE" ] && echo "/swapfile none swap sw 0 0"
+  is_swap_enabled "$@" && echo "/swap none swap sw 0 0"
 } >/mnt/etc/fstab
 
-[ -n "$_SWAP_SIZE" ] && {
-  chroot /mnt /bin/bash -c "fallocate -l $_SWAP_SIZE /swapfile"
-  chroot /mnt /bin/bash -c "chmod 600 /swapfile"
-  chroot /mnt /bin/bash -c "mkswap /swapfile"
+is_swap_enabled "$@" && {
+  chroot /mnt /bin/bash -c "fallocate -l $_SWAP_SIZE /swap"
+  chroot /mnt /bin/bash -c 'chmod 600 /swap'
+  chroot /mnt /bin/bash -c 'mkswap /swap'
 }
 
 echo "$_HOSTNAME" >/mnt/etc/hostname

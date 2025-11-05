@@ -17,22 +17,18 @@ If no arguments are provided to the script, simple interactive questions are dis
 ### Basic usage
 
 ```sh
-_TMP_FILE=$(mktemp)
-curl -Lfs -o "$_TMP_FILE" 'https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh'
-sh "$_TMP_FILE"
+curl -Lfs -- https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh | sh
 ```
 
 ### Unattended usage
 
 ```sh
-_TMP_FILE=$(mktemp)
-curl -Lfs -o "$_TMP_FILE" 'https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh'
-sh "$_TMP_FILE" \
+curl -Lfs -- https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh | sh -s -- \
   --hostname "$_HOSTNAME" \
   --password "$_PASSWORD" \
   --boot "$_BOOT_DEV" \
   --root "$_ROOT_DEV" \
-  --swap '4G' \
+  --swap '1G' \
   --keymap 'pt-latin9' \
   --timezone 'Europe/Lisbon'
 ```

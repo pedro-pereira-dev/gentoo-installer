@@ -151,10 +151,10 @@ echo 'sys-kernel/installkernel dracut grub' >>/mnt/etc/portage/package.use
 chroot /mnt /bin/bash -c "emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware" || exit 1
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
-is_bios && _GRUB_INSTALL="/dev/$(lsblk -dno pkname "$_BOOT_DEV")"
+is_bios && _GRUB_INSTALL="--removable /dev/$(lsblk -dno pkname "$_BOOT_DEV")"
 is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
 
-chroot /mnt /bin/bash -c "grub-install --removable $_GRUB_INSTALL" || exit 1
+chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL" || exit 1
 chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg' || exit 1
 
 {

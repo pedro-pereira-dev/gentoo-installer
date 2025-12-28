@@ -3,18 +3,19 @@
 set -eou pipefail
 
 get_parameter() {
-  _FLAG='' && [ $# -ge 1 ] && _FLAG=$1 && shift
+  _get_parameter_flag=$1 && shift
   while [ $# -ge 1 ]; do
-    _PARAM='' && [ $# -ge 1 ] && _PARAM=$1 && shift
-    [ "$_FLAG" = "$_PARAM" ] && {
-      _VAL='' && [ $# -ge 1 ] && _VAL=$1
-      # prints if it does not start with -
-      [ -n "$_VAL" ] && expr "x$_VAL" : 'x[^-]' >/dev/null && echo "$_VAL"
-      return 0
-    }
-  done
-  return 1
+    _get_parameter_param=$1 && shift
+    [ "$_get_parameter_flag" = "$_get_parameter_param" ] && {
+      _get_parameter_val='' && [ $# -ge 1 ] && _get_parameter_val=$1
+      # prints out if not starting by -
+      [ -n "$_get_parameter_val" ] && expr "x$_get_parameter_val" : 'x[^-]' >/dev/null &&
+        echo "$_get_parameter_val" || true
+    } && return 0
+  done && return 1
 }
+
+get_uuid() { blkid -o export "$1" | grep ^UUID | cut -d= -f2; }
 
 is_aarch64() { test "$(uname -m)" = aarch64; }
 is_amd64() { test "$(uname -m)" = x86_64; }
@@ -24,96 +25,98 @@ is_uefi() { test -d /sys/firmware/efi; }
 
 is_swap_enabled() { get_parameter --swap "$@" >/dev/null; }
 
-_HOSTNAME=$(get_parameter --hostname "$@") && [ -n "$_HOSTNAME" ] ||
+_hostname=$(get_parameter --hostname "$@") && [ -n "$_hostname" ] ||
   while true; do
-    printf 'Hostname: ' && read -r _HOSTNAME
-    [ -n "$_HOSTNAME" ] && case $_HOSTNAME in
+    printf 'Hostname: ' && read -r _hostname
+    [ -n "$_hostname" ] && case $_hostname in
     *[!a-zA-Z0-9-]* | '') ;;
     *) break ;;
     esac
   done
-_PASSWORD=$(get_parameter --password "$@") && [ -n "$_PASSWORD" ] ||
+_password=$(get_parameter --password "$@") && [ -n "$_password" ] ||
   while true; do
-    printf 'Password: ' && read -r _PASSWORD
-    [ -z "$_PASSWORD" ] && continue
-    printf 'Confirm password: ' && read -r _PASSWORD_CONFIRMATION
-    [ "$_PASSWORD" = "$_PASSWORD_CONFIRMATION" ] && break
+    printf 'Password: ' && read -r _password
+    [ -z "$_password" ] && continue
+    printf 'Confirm password: ' && read -r _password_confirmation
+    [ "$_password" = "$_password_confirmation" ] && break
   done
 
-_BOOT_DEV=$(get_parameter --boot "$@") && [ -n "$_BOOT_DEV" ] ||
+_boot_dev=$(get_parameter --boot "$@") && [ -n "$_boot_dev" ] ||
   while true; do
-    printf 'Boot device:' && read -r _BOOT_DEV
-    [ -e "$_BOOT_DEV" ] && break
+    printf 'Boot device:' && read -r _boot_dev
+    [ -e "$_boot_dev" ] && break
   done
-_ROOT_DEV=$(get_parameter --root "$@") && [ -n "$_ROOT_DEV" ] ||
+_root_dev=$(get_parameter --root "$@") && [ -n "$_root_dev" ] ||
   while true; do
-    printf 'Root device:' && read -r _ROOT_DEV
-    [ -e "$_ROOT_DEV" ] && break
+    printf 'Root device:' && read -r _root_dev
+    [ -e "$_root_dev" ] && break
   done
 
 is_swap_enabled "$@" && {
-  _SWAP_SIZE=$(get_parameter --swap "$@") && [ -z "$_SWAP_SIZE" ] &&
-    printf 'Swap size: [4G] ' && read -r _SWAP_SIZE
-  _SWAP_SIZE=${_SWAP_SIZE:-4G}
+  _swap_size=$(get_parameter --swap "$@") && [ -z "$_swap_size" ] &&
+    printf 'Swap size: [4G] ' && read -r _swap_size
+  _swap_size=${_swap_size:-4G}
 }
-_KEYMAP=$(get_parameter --keymap "$@") && [ -z "$_KEYMAP" ] &&
-  printf 'Keymap: [pt-latin9] ' && read -r _KEYMAP
-_KEYMAP=${_KEYMAP:-pt-latin9}
-_TIMEZONE=$(get_parameter --timezone "$@") && [ -z "$_TIMEZONE" ] &&
-  printf 'Timezone: [Europe/Lisbon] ' && read -r _TIMEZONE
-_TIMEZONE=${_TIMEZONE:-Europe/Lisbon}
+
+_keymap=$(get_parameter --keymap "$@") && [ -z "$_keymap" ] &&
+  printf 'Keymap: [pt-latin9] ' && read -r _keymap
+_keymap=${_keymap:-pt-latin9}
+_timezone=$(get_parameter --timezone "$@") && [ -z "$_timezone" ] &&
+  printf 'Timezone: [Europe/Lisbon] ' && read -r _timezone
+_timezone=${_timezone:-Europe/Lisbon}
 
 echo 'Installation details:'
 is_bios && echo ' - Partition table: msdos'
 is_uefi && echo ' - Partition table: gpt'
 echo " - CPU architecture: $(uname -m)"
-echo " - Hostname: $_HOSTNAME"
-echo " - Password: $_PASSWORD"
-echo " - Boot device: $_BOOT_DEV"
-echo " - Root device: $_ROOT_DEV"
-is_swap_enabled "$@" && echo " - Swap file size: $_SWAP_SIZE"
-echo " - Keymap: $_KEYMAP"
-echo " - Timezone: $_TIMEZONE"
+echo " - Hostname: $_hostname"
+echo " - Password: $_password"
+echo " - Boot device: $_boot_dev"
+echo " - Root device: $_root_dev"
+is_swap_enabled "$@" && echo " - Swap file size: $_swap_size"
+echo " - Keymap: $_keymap"
+echo " - Timezone: $_timezone"
 echo ''
-echo "All data from devices $_BOOT_DEV and $_ROOT_DEV will be erased!"
+echo "All data from devices $_boot_dev and $_root_dev will be erased!"
 printf 'Press any key to continue...' && read -r _
 
-is_bios && ! mkfs.ext4 -F "$_BOOT_DEV" && exit 1   # mbr / bios partition with EXT4
-is_uefi && ! mkfs.fat -F 32 "$_BOOT_DEV" && exit 1 # efi partition with FAT32
-mkfs.ext4 -F "$_ROOT_DEV" || exit 1                # root partition with EXT4
+is_bios && ! mkfs.ext4 -F "$_boot_dev" && exit 1   # mbr / bios partition with EXT4
+is_uefi && ! mkfs.fat -F 32 "$_boot_dev" && exit 1 # efi partition with FAT32
+mkfs.ext4 -F "$_root_dev" || exit 1                # root partition with EXT4
 
-mount -m "$_ROOT_DEV" /mnt || exit 1
-is_bios && ! mount -m "$_BOOT_DEV" /mnt/boot && exit 1
-is_uefi && ! mount -m "$_BOOT_DEV" /mnt/efi && exit 1
+mount -m "$_root_dev" /mnt || exit 1
+is_bios && ! mount -m "$_boot_dev" /mnt/boot && exit 1
+is_uefi && ! mount -m "$_boot_dev" /mnt/efi && exit 1
 
-{ is_aarch64 && _ARCH=arm64; } || { is_amd64 && _ARCH=amd64; }
-_METADATA="https://gentoo.osuosl.org/releases/$_ARCH/autobuilds/latest-stage3-$_ARCH-openrc.txt"
-_BUILD=$(curl -Lfs "$_METADATA" | sed -n 6p | cut -d' ' -f1)
-_STAGE_FILE="https://distfiles.gentoo.org/releases/$_ARCH/autobuilds/$_BUILD"
+is_aarch64 && _arch=arm64
+is_amd64 && _arch=amd64
+_metadata="https://gentoo.osuosl.org/releases/$_arch/autobuilds/latest-stage3-$_arch-openrc.txt"
+_build=$(curl -Lfs "$_metadata" | sed -n 6p | cut -d' ' -f1)
+_stage_file="https://distfiles.gentoo.org/releases/$_arch/autobuilds/$_build"
 
 echo 'Dowloading latest gentoo stage release...'
-curl -Lf# -o /mnt/stage3-current.tar.xz "$_STAGE_FILE" || exit 1
+curl -Lf# -o /mnt/stage3-current.tar.xz "$_stage_file" || exit 1
 tar xpf /mnt/stage3-current.tar.xz -C /mnt --numeric-owner --xattrs-include=*.* || exit 1
 rm -fr /mnt/stage3-current.tar.xz /mnt/etc/portage/package.*
 
 cp -L /etc/resolv.conf /mnt/etc
-mount --types proc /proc /mnt/proc
-mount --rbind /sys /mnt/sys
+mount -t proc /proc /mnt/proc
+mount -R /sys /mnt/sys
 mount --make-rslave /mnt/sys
-mount --rbind /dev /mnt/dev
+mount -R /dev /mnt/dev
 mount --make-rslave /mnt/dev
-mount --bind /run /mnt/run
+mount -B /run /mnt/run
 mount --make-slave /mnt/run
 
-_THREADS=$(nproc)                               # number of threads
-_TOTAL_RAM=$(free -g | awk '/Mem:/ {print $2}') # in gb
-_HALF_RAM=$((_TOTAL_RAM / 2))                   # in gb
+_threads=$(nproc)                               # number of threads
+_total_ram=$(free -g | awk '/Mem:/ {print $2}') # in gb
+_half_ram=$((_total_ram / 2))                   # in gb
 
-_MAKE_JOBS=$_THREADS
-[ "$_HALF_RAM" -lt "$_THREADS" ] && _MAKE_JOBS=$_HALF_RAM # min between threads and available 2gb ram per thread
-[ "$_MAKE_JOBS" -lt 1 ] && _MAKE_JOBS=1                   # must have at least one job
-_LOAD_JOBS=$((_MAKE_JOBS + 1))                            # extra one io thread
-_PORTAGE_JOBS=$((_LOAD_JOBS / 2))                         # allow half of jobs to portage
+_make_jobs=$_threads
+[ "$_half_ram" -lt "$_threads" ] && _make_jobs=$_half_ram # min between threads and available 2gb ram per thread
+[ "$_make_jobs" -lt 1 ] && _make_jobs=1                   # must have at least one job
+_load_jobs=$((_make_jobs + 1))                            # extra one io thread
+_portage_jobs=$((_load_jobs / 2))                         # allow half of jobs to portage
 
 mkdir -p /mnt/etc/portage/env
 echo '*/* gentoo-installer-make.conf' >>/mnt/etc/portage/package.env
@@ -135,43 +138,43 @@ echo '*/* gentoo-installer-make.conf' >>/mnt/etc/portage/package.env
   is_uefi && echo 'GRUB_PLATFORMS="efi-64"'
   echo ''
   echo '# portage default options'
-  echo "EMERGE_DEFAULT_OPTS=\"--ask --jobs $_PORTAGE_JOBS --load-average $_LOAD_JOBS --quiet --verbose\""
+  echo "EMERGE_DEFAULT_OPTS=\"-aqv -j $_portage_jobs -l $_load_jobs\""
   echo 'FEATURES="$FEATURES binpkg-request-signature getbinpkg"'
-  echo "MAKEOPTS=\"--jobs $_MAKE_JOBS --load-average $_LOAD_JOBS\""
+  echo "MAKEOPTS=\"-j $_make_jobs -l $_load_jobs\""
 } >>/mnt/etc/portage/env/gentoo-installer-make.conf
 
 chroot /mnt /bin/bash -c 'emerge-webrsync' || exit 1
-chroot /mnt /bin/bash -c "ln -fs /usr/share/zoneinfo/$_TIMEZONE /etc/localtime"
+chroot /mnt /bin/bash -c "ln -fs /usr/share/zoneinfo/$_timezone /etc/localtime"
 chroot /mnt /bin/bash -c 'echo "en_US.UTF-8 UTF-8" >/etc/locale.gen'
 chroot /mnt /bin/bash -c 'hwclock -uw && locale-gen && eselect locale set 4' || exit 1
-chroot /mnt /bin/bash -c "sed -i 's/keymap=\"[^\"]*\"*/keymap=\"$_KEYMAP\"/g' /etc/conf.d/keymaps"
+chroot /mnt /bin/bash -c "sed -i 's/keymap=\"[^\"]*\"*/keymap=\"$_keymap\"/g' /etc/conf.d/keymaps"
 
 echo 'sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE' >>/mnt/etc/portage/package.license
 echo 'sys-kernel/installkernel dracut grub' >>/mnt/etc/portage/package.use
 chroot /mnt /bin/bash -c "emerge --ask=n sys-kernel/gentoo-kernel-bin sys-kernel/installkernel sys-kernel/linux-firmware" || exit 1
 chroot /mnt /bin/bash -c 'eselect news read --quiet all'
 
-is_bios && _GRUB_INSTALL="--removable /dev/$(lsblk -dno pkname "$_BOOT_DEV")"
-is_uefi && _GRUB_INSTALL='--efi-directory=/efi'
+is_bios && _grub_install="--removable /dev/$(lsblk -dno pkname "$_boot_dev")"
+is_uefi && _grub_install=--efi-directory=/efi
 
-chroot /mnt /bin/bash -c "grub-install $_GRUB_INSTALL" || exit 1
+chroot /mnt /bin/bash -c "grub-install $_grub_install" || exit 1
 chroot /mnt /bin/bash -c 'grub-mkconfig -o /boot/grub/grub.cfg' || exit 1
 
 {
-  echo '# <fs> <mountpoint> <type> <opts> <dump> <pass>'
-  is_bios && echo "$_BOOT_DEV /boot ext4 defaults,noatime,nodev,nosuid 0 2"
-  is_uefi && echo "$_BOOT_DEV /efi vfat defaults,noatime,nodev,noexec,nosuid,umask=0077 0 2"
-  echo "$_ROOT_DEV / ext4 defaults,noatime 0 1"
-  is_swap_enabled "$@" && echo "/swap none swap sw 0 0"
+  echo '# system'
+  is_bios && echo "UUID=\"$(get_uuid "$_boot_dev")\" /boot ext4 defaults,noatime,nodev,nosuid 0 2"
+  is_uefi && echo "UUID=\"$(get_uuid "$_boot_dev")\" /efi vfat defaults,noatime,nodev,noexec,nosuid,umask=0077 0 2"
+  echo "UUID=\"$(get_uuid "$_root_dev")\" / ext4 defaults,noatime 0 1"
 } >/mnt/etc/fstab
 
 is_swap_enabled "$@" && {
-  chroot /mnt /bin/bash -c "fallocate -l $_SWAP_SIZE /swap" || exit 1
+  chroot /mnt /bin/bash -c "fallocate -l $_swap_size /swap" || exit 1
   chroot /mnt /bin/bash -c 'chmod 600 /swap'
   chroot /mnt /bin/bash -c 'mkswap /swap' || exit 1
+  echo '/swap none swap sw 0 0' >>/mnt/etc/fstab
 }
 
-echo "$_HOSTNAME" >/mnt/etc/hostname
-sed -i "s/hostname=\"[^\"]*\"/hostname=\"$_HOSTNAME\"/g" /mnt/etc/conf.d/hostname
-echo "root:$_PASSWORD" | chroot /mnt /usr/sbin/chpasswd
+echo "$_hostname" >/mnt/etc/hostname
+sed -i "s/hostname=\"[^\"]*\"/hostname=\"$_hostname\"/g" /mnt/etc/conf.d/hostname
+echo "root:$_password" | chroot /mnt /usr/sbin/chpasswd
 exit 0

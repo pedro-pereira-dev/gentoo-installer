@@ -25,13 +25,13 @@ If no arguments are provided to the script, simple interactive questions are dis
 ### Basic usage
 
 ```sh
-curl -Lfs -- https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh | bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh)"
 ```
 
 ### Unattended usage
 
 ```sh
-curl -Lfs -- https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh | bash -s -- \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/pedro-pereira-dev/gentoo-installer/refs/heads/main/install.sh)" -- \
   --hostname "$_HOSTNAME" \
   --password "$_PASSWORD" \
   --boot "$_BOOT_DEV" \

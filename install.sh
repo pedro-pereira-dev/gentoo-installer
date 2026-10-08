@@ -20,8 +20,9 @@ ask_default() { { _answer=$(ask "$1 [$2]") || true; } && echo "${_answer:-$2}"; 
 ask_until() { while true; do _answer=$(ask "$1") && "$2" "$_answer" && echo "$_answer" && return; done; }
 ask_password() {
   while true; do
-    _answer=$(ask_until Password is_not_empty)
-    [ "$(ask 'Confirm password')" = "$_answer" ] && echo "$_answer" && return
+    printf 'Password: ' >&2 && read -rs _answer && echo >&2
+    printf 'Confirm password: ' >&2 && read -rs _confirm && echo >&2
+    is_not_empty "$_answer" && [ "$_confirm" = "$_answer" ] && echo "$_answer" && return
   done
 }
 
